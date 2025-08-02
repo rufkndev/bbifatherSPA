@@ -1,0 +1,20 @@
+{
+  "name": "student-orders-spa",
+  "version": "1.0.0",
+  "description": "Система управления заказами практических работ для студентов",
+  "scripts": {
+    "dev": "docker-compose up --build",
+    "dev:frontend": "cd frontend && npm start",
+    "dev:backend": "cd backend && uvicorn main:app --reload",
+    "dev:bot": "cd bot && python main.py",
+    "build": "cd frontend && npm run build",
+    "install:all": "cd frontend && npm install && cd ../backend && pip install -r requirements.txt && cd ../bot && pip install -r requirements.txt",
+    "setup": "cp .env.example .env && npm run install:all"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-username/student-orders-spa.git"
+  },
+  "author": "",
+  "license": "ISC"
+}
