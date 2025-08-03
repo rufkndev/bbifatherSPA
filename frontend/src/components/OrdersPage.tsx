@@ -245,46 +245,99 @@ const OrdersPage: React.FC = () => {
   }
 
   return (
-    <Box sx={{ maxWidth: 1400, mx: 'auto', p: 2 }}>
+    <Box sx={{ maxWidth: 1400, mx: 'auto', px: 3, py: 4 }}>
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-        <Box>
-          <Typography variant="h3" component="h1" sx={{ fontWeight: 700, mb: 1 }}>
-            📚 Мои заказы
-          </Typography>
-          <Typography variant="subtitle1" color="text.secondary">
-            Управляйте вашими академическими работами
-          </Typography>
-        </Box>
-        
-        <Box display="flex" gap={2} alignItems="center">
-          <Button
-            component={Link}
-            to="/create"
-            variant="contained"
-            size="large"
-            startIcon={<AddIcon />}
-            sx={{ borderRadius: 3, px: 3 }}
-          >
-            Новый заказ
-          </Button>
-        </Box>
+      <Box 
+        sx={{
+          background: '#ffffff',
+          borderRadius: 4,
+          p: 3,
+          mb: 4,
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+        }}
+      >
+        <Typography 
+          variant="h2" 
+          component="h1" 
+          sx={{ 
+            fontWeight: 700, 
+            mb: 1,
+            color: '#1e293b',
+          }}
+        >
+          Мои заказы
+        </Typography>
+        <Typography 
+          variant="subtitle1" 
+          sx={{ 
+            color: 'grey.600',
+            fontWeight: 500,
+            fontSize: '1.1rem',
+          }}
+        >
+          Отслеживайте статус ваших работ
+        </Typography>
       </Box>
 
       {/* Статистика */}
       {orders.length > 0 && (
-        <Grid container spacing={2} mb={4}>
+        <Grid container spacing={1} mb={4}>
           {statsData.map(({ status, config, count }) => (
-            <Grid item xs={6} sm={4} md={2.4} key={status}>
-              <Card sx={{ textAlign: 'center', bgcolor: count > 0 ? `${config.color}.50` : 'grey.50' }}>
-                <CardContent sx={{ py: 2 }}>
-                  <Typography variant="h4" sx={{ mb: 1 }}>
+            <Grid item xs={6} sm={4} md={2} key={status}>
+              <Card 
+                sx={{ 
+                  textAlign: 'center',
+                  background: count > 0 
+                    ? 'rgba(37, 99, 235, 0.05)'
+                    : '#ffffff',
+                  border: count > 0 
+                    ? '1px solid rgba(37, 99, 235, 0.2)'
+                    : '1px solid #e2e8f0',
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                  },
+                }}
+              >
+                <CardContent sx={{ py: 2, px: 1 }}>
+                  <Box
+                    sx={{
+                      fontSize: '1.5rem',
+                      mb: 1,
+                      opacity: count > 0 ? 1 : 0.5,
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minHeight: '2rem',
+                      lineHeight: 1,
+                    }}
+                  >
                     {config.icon}
-                  </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                  </Box>
+                  
+                  <Typography 
+                    variant="h5" 
+                    sx={{ 
+                      fontWeight: 700,
+                      mb: 0.5,
+                      color: count > 0 ? '#2563eb' : '#64748b',
+                      fontSize: '1.5rem',
+                    }}
+                  >
                     {count}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      color: count > 0 ? '#374151' : '#6b7280',
+                      fontWeight: 500,
+                      fontSize: '0.75rem',
+                      lineHeight: 1.2,
+                    }}
+                  >
                     {config.label}
                   </Typography>
                 </CardContent>
@@ -295,34 +348,95 @@ const OrdersPage: React.FC = () => {
       )}
 
       {/* Блок тех поддержки */}
-      <Card sx={{ mb: 4, bgcolor: 'primary.50', border: '1px solid', borderColor: 'primary.200' }}>
-        <CardContent>
-          <Box display="flex" alignItems="center" gap={2}>
+      <Card 
+        sx={{ 
+          mb: 4,
+          background: 'rgba(37, 99, 235, 0.05)',
+          border: '1px solid rgba(37, 99, 235, 0.2)', 
+          position: 'relative',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '3px',
+            background: '#2563eb',
+          }
+        }}
+      >
+        <CardContent sx={{ py: 3 }}>
+          <Box display="flex" alignItems="center" gap={3}>
             <Box sx={{ 
               width: 48, 
               height: 48, 
-              borderRadius: '50%', 
-              bgcolor: 'primary.main', 
+              borderRadius: '8px', 
+              background: '#2563eb',
               display: 'flex', 
               alignItems: 'center', 
-              justifyContent: 'center' 
+              justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(37, 99, 235, 0.2)',
             }}>
-              <Typography variant="h6" color="white">💬</Typography>
+              <Typography 
+                variant="h6" 
+                sx={{ 
+                  color: 'white',
+                  fontSize: '1.5rem',
+                  lineHeight: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                💬
+              </Typography>
             </Box>
             <Box flexGrow={1}>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+              <Typography 
+                variant="h5" 
+                sx={{ 
+                  fontWeight: 600, 
+                  mb: 1,
+                  color: '#1e293b',
+                }}
+              >
                 Техническая поддержка
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                По сложным вопросам пишите в Telegram: <strong>@artemonnnnnnn</strong>
+              <Typography 
+                variant="body1" 
+                sx={{ 
+                  color: 'grey.700',
+                  fontWeight: 500,
+                  fontSize: '1rem',
+                }}
+              >
+                По сложным вопросам пишите в Telegram:{' '}
+                <Box 
+                  component="span" 
+                  sx={{ 
+                    fontWeight: 600,
+                    color: '#2563eb',
+                  }}
+                >
+                  @artemonnnnnnn
+                </Box>
               </Typography>
             </Box>
             <Button
-              variant="outlined"
-              size="small"
+              variant="contained"
               href="https://t.me/artemonnnnnnn"
               target="_blank"
-              sx={{ borderRadius: 2 }}
+              sx={{ 
+                borderRadius: 6,
+                px: 2,
+                py: 1,
+                fontWeight: 600,
+                textTransform: 'none',
+                background: '#2563eb',
+                '&:hover': {
+                  background: '#1d4ed8',
+                }
+              }}
             >
               Написать
             </Button>
@@ -332,26 +446,76 @@ const OrdersPage: React.FC = () => {
 
       {/* Заказы */}
       {orders.length === 0 ? (
-        <Card sx={{ textAlign: 'center', py: 8 }}>
-          <CardContent>
-            <Typography variant="h1" sx={{ fontSize: 80, mb: 2 }}>
+        <Card 
+          sx={{ 
+            textAlign: 'center', 
+            py: 8,
+            background: '#ffffff',
+            border: '2px dashed #d1d5db',
+            borderRadius: 4,
+          }}
+        >
+          <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+            <Box
+              sx={{
+                fontSize: '4rem',
+                mb: 3,
+                opacity: 0.7,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: '5rem',
+                lineHeight: 1,
+              }}
+            >
               📝
-            </Typography>
-            <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
+            </Box>
+            
+            <Typography 
+              variant="h3" 
+              gutterBottom 
+              sx={{ 
+                fontWeight: 700, 
+                mb: 2,
+                color: '#1e293b',
+              }}
+            >
               У вас пока нет заказов
             </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-              Создайте свой первый заказ прямо сейчас!
+            
+            <Typography 
+              variant="h6" 
+              sx={{ 
+                mb: 4,
+                color: 'grey.600',
+                fontWeight: 500,
+                maxWidth: 400,
+                mx: 'auto',
+              }}
+            >
+              Создайте свой первый заказ прямо сейчас и начните работать с нашими экспертами!
             </Typography>
+            
             <Button
               component={Link}
               to="/create"
               variant="contained"
               size="large"
               startIcon={<AddIcon />}
-              sx={{ borderRadius: 3, px: 4, py: 1.5 }}
+              sx={{ 
+                borderRadius: 4, 
+                px: 3, 
+                py: 1.5,
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                textTransform: 'none',
+                background: '#2563eb',
+                '&:hover': {
+                  background: '#1d4ed8',
+                }
+              }}
             >
-              Создать первый заказ
+              Создать заказ
             </Button>
           </CardContent>
         </Card>
@@ -362,59 +526,108 @@ const OrdersPage: React.FC = () => {
             const deadlineStatus = getDeadlineStatus(order.deadline);
             
             return (
-              <Grid item xs={12} sm={6} lg={4} key={order.id}>
+              <Grid item xs={12} md={6} lg={4} key={order.id}>
                 <Card 
                   sx={{ 
                     height: '100%',
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 4,
+                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                    transition: 'all 0.2s ease',
+                    '&:hover': {
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                    },
                     display: 'flex',
                     flexDirection: 'column',
-                    transition: 'all 0.3s ease',
-                    '&:hover': { 
-                      transform: 'translateY(-4px)',
-                      boxShadow: 4
-                    }
                   }}
                 >
-                  <CardContent sx={{ flexGrow: 1 }}>
-                    {/* Header */}
+                  <CardContent sx={{ 
+                    height: '100%', 
+                    display: 'flex', 
+                    flexDirection: 'column',
+                    p: 3,
+                    '&:last-child': { pb: 3 }
+                  }}>
+                    {/* Заголовок и статус */}
                     <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
-                      <Box flexGrow={1}>
-                        <Typography 
-                          variant="h6" 
-                          component="h2" 
-                          sx={{ 
-                            fontWeight: 600,
-                            lineHeight: 1.3,
-                            mb: 0.5
-                          }}
-                        >
-                          {order.title}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {order.subject?.name}
-                        </Typography>
-                      </Box>
+                      <Typography 
+                        variant="h6" 
+                        component="h3" 
+                        sx={{ 
+                          fontWeight: 700,
+                          color: '#1e293b',
+                          flexGrow: 1,
+                          pr: 1,
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        {order.title}
+                      </Typography>
+                      <Chip
+                        label={`${statusInfo.icon} ${statusConfig[order.status].label}`}
+                        size="small"
+                        sx={{
+                          fontWeight: 600,
+                          fontSize: '0.75rem',
+                          background: statusInfo.color === 'success'
+                            ? 'rgba(16, 185, 129, 0.1)'
+                            : statusInfo.color === 'error'
+                            ? 'rgba(239, 68, 68, 0.1)'
+                            : 'rgba(37, 99, 235, 0.1)',
+                          color: statusInfo.color === 'success'
+                            ? '#059669'
+                            : statusInfo.color === 'error'
+                            ? '#dc2626'
+                            : '#2563eb',
+                          border: `1px solid ${
+                            statusInfo.color === 'success'
+                              ? '#10b981'
+                              : statusInfo.color === 'error'
+                              ? '#ef4444'
+                              : '#2563eb'
+                          }33`,
+                        }}
+                      />
                     </Box>
 
                     {/* Прогресс */}
-                    <Box mb={2}>
-                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                        <Chip 
-                          label={statusInfo.label}
-                          color={statusInfo.color}
-                          size="small"
-                          sx={{ fontWeight: 600 }}
-                        />
-                        <Typography variant="body2" color="text.secondary">
-                          {statusInfo.progress}%
+                    <Box mb={3}>
+                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                        <Typography 
+                          variant="body2" 
+                          sx={{ 
+                            color: 'grey.600',
+                            fontWeight: 600,
+                            fontSize: '0.85rem',
+                          }}
+                        >
+                          Прогресс: {statusInfo.progress}%
                         </Typography>
                       </Box>
-                      <LinearProgress 
-                        variant="determinate" 
-                        value={statusInfo.progress} 
-                        color={statusInfo.color}
-                        sx={{ borderRadius: 1, height: 6 }}
-                      />
+                      <Box
+                        sx={{
+                          width: '100%',
+                          height: 6,
+                          borderRadius: 3,
+                          background: 'rgba(37, 99, 235, 0.1)',
+                          position: 'relative',
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width: `${statusInfo.progress}%`,
+                            height: '100%',
+                            background: statusInfo.color === 'success' 
+                              ? '#10b981'
+                              : statusInfo.color === 'error' 
+                              ? '#ef4444'
+                              : '#2563eb',
+                            borderRadius: 3,
+                            transition: 'width 0.3s ease-in-out',
+                          }}
+                        />
+                      </Box>
                     </Box>
 
                     {/* Описание */}
@@ -426,7 +639,6 @@ const OrdersPage: React.FC = () => {
                         display: '-webkit-box',
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden'
                       }}
                     >
                       {order.description}
@@ -669,6 +881,38 @@ const OrdersPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Условия использования */}
+      <Box 
+        sx={{ 
+          mt: 6, 
+          pt: 4, 
+          borderTop: '1px solid #e2e8f0',
+          textAlign: 'center'
+        }}
+      >
+        <Typography 
+          variant="body2" 
+          sx={{ 
+            color: '#6b7280',
+            fontSize: '0.75rem',
+            lineHeight: 1.4,
+            maxWidth: 800,
+            mx: 'auto',
+            px: 2,
+          }}
+        >
+          Используя данный сервис для заказа практических работ вы подтверждаете свое согласие со следующими условиями использования:
+          <br />
+          1. Администратор имеет право отказать в выполнении практической работы без объяснения причин
+          <br />
+          2. Пользователь имеет право на одно бесплатное исправление. Полный список замечаний по работе необходимо узнать у преподавателя до подачи заявки на исправление
+          <br />
+          3. Цены на практические работы могут изменяться в течение всего учебного периода
+          <br />
+          4. Администратор может прикрепить практическую работу позже выставленного пользователем дедлайна, если пользователь выставил дедлайн, срок до которого менее одной недели
+        </Typography>
+      </Box>
 
     </Box>
   );

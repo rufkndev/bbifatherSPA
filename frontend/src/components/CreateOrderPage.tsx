@@ -294,31 +294,62 @@ const CreateOrderPage: React.FC = () => {
                 sx={{ mb: 2 }}
               />
             ) : (
-              <Grid container spacing={2}>
+              <Grid container spacing={3}>
                 {subjectsData.map((subject) => (
                   <Grid item xs={12} md={6} key={subject.id}>
                     <Card 
                       sx={{ 
                         cursor: 'pointer',
-                        border: formData.subjectId === subject.id ? 2 : 1,
-                        borderColor: formData.subjectId === subject.id ? 'primary.main' : 'divider',
+                        background: formData.subjectId === subject.id 
+                          ? 'rgba(37, 99, 235, 0.05)'
+                          : '#ffffff',
+                        border: formData.subjectId === subject.id 
+                          ? '2px solid #2563eb' 
+                          : '1px solid #e2e8f0',
+                        borderRadius: 4,
+                        position: 'relative',
+                        transition: 'all 0.2s ease',
                         '&:hover': { 
-                          boxShadow: 3,
-                          borderColor: 'primary.light'
-                        }
+                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                          background: formData.subjectId === subject.id 
+                            ? 'rgba(37, 99, 235, 0.08)'
+                            : '#ffffff',
+                        },
+                        '&::before': formData.subjectId === subject.id ? {
+                          content: '""',
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          height: '3px',
+                          background: '#2563eb',
+                        } : {}
                       }}
                       onClick={() => setFormData(prev => ({ ...prev, subjectId: subject.id }))}
                     >
-                      <CardContent>
-                        <Box display="flex" justifyContent="space-between" alignItems="start" mb={1}>
-                          <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                      <CardContent sx={{ p: 3 }}>
+                        <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
+                          <Typography 
+                            variant="h6" 
+                            component="h3" 
+                            sx={{ 
+                              fontWeight: 700,
+                              color: 'grey.800',
+                              fontSize: '1.2rem',
+                              pr: 1,
+                            }}
+                          >
                             {subject.name}
                           </Typography>
                           <Chip 
                             label={`${subject.semester} семестр`} 
-                            size="small" 
-                            color="primary" 
-                            variant="outlined"
+                            size="small"
+                            sx={{
+                              background: 'rgba(37, 99, 235, 0.1)',
+                              color: '#2563eb',
+                              fontWeight: 600,
+                              border: '1px solid rgba(37, 99, 235, 0.2)',
+                            }}
                           />
                         </Box>
 
@@ -326,13 +357,51 @@ const CreateOrderPage: React.FC = () => {
                           <Chip 
                             label={`${subject.works.length} работ`} 
                             size="small" 
-                            icon={<Assignment />}
-                            variant="outlined"
+                            icon={<Assignment sx={{ fontSize: 16 }} />}
+                            sx={{
+                              background: 'rgba(37, 99, 235, 0.08)',
+                              color: '#2563eb',
+                              fontWeight: 500,
+                              border: '1px solid rgba(37, 99, 235, 0.15)',
+                              '& .MuiChip-icon': {
+                                color: '#2563eb',
+                              }
+                            }}
                           />
-                          <Typography variant="h6" color="primary" sx={{ fontWeight: 600 }}>
+                          <Typography 
+                            variant="h6" 
+                            sx={{ 
+                              fontWeight: 700,
+                              color: '#2563eb',
+                            }}
+                          >
                             от {Math.min(...subject.works.map(w => w.price))} ₽
                           </Typography>
                         </Box>
+                        
+                        {formData.subjectId === subject.id && (
+                          <Box
+                            sx={{
+                              position: 'absolute',
+                              top: 12,
+                              right: 12,
+                              width: 24,
+                              height: 24,
+                              borderRadius: '50%',
+                              background: '#10b981',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: 'white',
+                              fontSize: '14px',
+                              fontWeight: 700,
+                              boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                              zIndex: 1,
+                            }}
+                          >
+                            ✓
+                          </Box>
+                        )}
                       </CardContent>
                     </Card>
                   </Grid>
@@ -462,12 +531,27 @@ const CreateOrderPage: React.FC = () => {
                       height: '100%',
                       border: formData.selectedWorks.includes(work.id) ? 2 : 1,
                       borderColor: formData.selectedWorks.includes(work.id) ? 'primary.main' : 'divider',
-                      opacity: formData.isFullCourse ? 0.7 : 1
+                      opacity: formData.isFullCourse ? 0.7 : 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      borderRadius: 4,
                     }}
                   >
-                    <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                      <Box display="flex" justifyContent="space-between" alignItems="start" mb={1}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600, flexGrow: 1 }}>
+                    <CardContent sx={{ 
+                      height: '100%', 
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      p: 3,
+                      '&:last-child': { pb: 3 }
+                    }}>
+                      <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
+                        <Typography variant="subtitle1" sx={{ 
+                          fontWeight: 600, 
+                          flexGrow: 1,
+                          fontSize: '0.95rem',
+                          lineHeight: 1.3,
+                          pr: 1,
+                        }}>
                           {work.title}
                         </Typography>
                         <Checkbox
@@ -475,17 +559,37 @@ const CreateOrderPage: React.FC = () => {
                           onChange={() => handleWorkToggle(work.id)}
                           disabled={formData.isFullCourse}
                           color="primary"
+                          size="small"
+                          sx={{ 
+                            ml: 1,
+                            width: 32,
+                            height: 32,
+                            padding: 0.5,
+                            '& .MuiSvgIcon-root': {
+                              fontSize: '1.2rem',
+                              width: '1.2rem',
+                              height: '1.2rem',
+                            }
+                          }}
                         />
                       </Box>
                       
                       {work.description && (
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, flexGrow: 1 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ 
+                          mb: 2, 
+                          flexGrow: 1,
+                          fontSize: '0.85rem',
+                          lineHeight: 1.4,
+                        }}>
                           {work.description}
                         </Typography>
                       )}
                       
-                      <Box display="flex" justifyContent="flex-end" alignItems="center" mt="auto">
-                        <Typography variant="h6" color="primary" sx={{ fontWeight: 600 }}>
+                      <Box display="flex" justifyContent="flex-end" alignItems="center" mt="auto" pt={1}>
+                        <Typography variant="h6" color="primary" sx={{ 
+                          fontWeight: 600,
+                          fontSize: '1.1rem',
+                        }}>
                           {work.price} ₽
                         </Typography>
                       </Box>
@@ -669,24 +773,149 @@ const CreateOrderPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: 'auto', p: 2 }}>
+    <Box sx={{ maxWidth: 1200, mx: 'auto', px: 3, py: 4 }}>
       {/* Header */}
-      <Box display="flex" alignItems="center" mb={4}>
-        <IconButton onClick={() => navigate('/')} sx={{ mr: 2 }}>
-          <ArrowBack />
+      <Box 
+        display="flex" 
+        alignItems="center" 
+        mb={4}
+        sx={{
+          background: '#ffffff',
+          borderRadius: 8,
+          p: 3,
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+        }}
+      >
+        <IconButton 
+          onClick={() => navigate('/')} 
+          sx={{ 
+            mr: 3,
+            background: 'rgba(37, 99, 235, 0.1)',
+            border: '1px solid rgba(37, 99, 235, 0.2)',
+            borderRadius: 6,
+            p: 1.5,
+            '&:hover': {
+              background: 'rgba(37, 99, 235, 0.2)',
+            }
+          }}
+        >
+          <ArrowBack sx={{ color: '#2563eb' }} />
         </IconButton>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>
-          Новый заказ
-        </Typography>
+        
+        <Box sx={{ position: 'relative' }}>
+          <Typography 
+            variant="h2" 
+            sx={{ 
+              fontWeight: 700, 
+              color: '#1e293b',
+            }}
+          >
+            Новый заказ
+          </Typography>
+          <Typography 
+            variant="subtitle1" 
+            sx={{ 
+              color: 'grey.600',
+              fontWeight: 500,
+              fontSize: '1.1rem',
+              mt: 0.5
+            }}
+          >
+            Шаг {activeStep + 1} из {steps.length}
+          </Typography>
+        </Box>
       </Box>
 
       {/* Stepper */}
-      <Card sx={{ mb: 4 }}>
-        <CardContent>
-          <Stepper activeStep={activeStep} alternativeLabel>
-            {steps.map((label) => (
+      <Card 
+        sx={{ 
+          mb: 6,
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: 8,
+          position: 'relative',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '3px',
+            background: '#2563eb',
+          }
+        }}
+      >
+        <CardContent sx={{ py: 4 }}>
+          <Stepper 
+            activeStep={activeStep} 
+            alternativeLabel
+            sx={{
+              '& .MuiStepConnector-root': {
+                top: 22,
+                left: 'calc(-50% + 16px)',
+                right: 'calc(50% + 16px)',
+                '& .MuiStepConnector-line': {
+                  borderColor: 'rgba(99, 102, 241, 0.2)',
+                  borderTopWidth: 3,
+                  borderRadius: 2,
+                }
+              },
+              '& .MuiStepConnector-active .MuiStepConnector-line': {
+                background: 'linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%)',
+                border: 'none',
+                height: 3,
+              },
+              '& .MuiStepConnector-completed .MuiStepConnector-line': {
+                background: 'linear-gradient(90deg, #10b981 0%, #34d399 100%)',
+                border: 'none',
+                height: 3,
+              },
+              '& .MuiStepLabel-label': {
+                fontWeight: 600,
+                fontSize: '1rem',
+                '&.Mui-active': {
+                  color: '#6366f1',
+                  fontWeight: 700,
+                },
+                '&.Mui-completed': {
+                  color: '#059669',
+                  fontWeight: 600,
+                }
+              }
+            }}
+          >
+            {steps.map((label, index) => (
               <Step key={label}>
-                <StepLabel>{label}</StepLabel>
+                <StepLabel
+                  StepIconComponent={({ active, completed }) => (
+                    <Box
+                      sx={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.1rem',
+                        fontWeight: 700,
+                        background: completed 
+                          ? 'linear-gradient(135deg, #10b981 0%, #34d399 100%)'
+                          : active 
+                          ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)'
+                          : 'rgba(99, 102, 241, 0.1)',
+                        color: completed || active ? 'white' : '#6366f1',
+                        border: completed || active ? 'none' : '2px solid rgba(99, 102, 241, 0.3)',
+                        boxShadow: completed || active ? '0 4px 15px rgba(99, 102, 241, 0.3)' : 'none',
+                        transition: 'all 0.3s ease',
+                      }}
+                    >
+                      {completed ? '✓' : index + 1}
+                    </Box>
+                  )}
+                >
+                  {label}
+                </StepLabel>
               </Step>
             ))}
           </Stepper>
@@ -694,22 +923,71 @@ const CreateOrderPage: React.FC = () => {
       </Card>
 
       {/* Content */}
-      <Card>
-        <CardContent sx={{ minHeight: 400 }}>
+      <Card 
+        sx={{
+          background: 'rgba(255, 255, 255, 0.7)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(99, 102, 241, 0.15)',
+          borderRadius: 6,
+          boxShadow: '0 8px 32px rgba(99, 102, 241, 0.1)',
+        }}
+      >
+        <CardContent sx={{ minHeight: 500, p: 4 }}>
           {renderStepContent(activeStep)}
           
           {error && (
-            <Alert severity="error" sx={{ mt: 3 }}>
+            <Alert 
+              severity="error" 
+              sx={{ 
+                mt: 3,
+                borderRadius: 3,
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
+                backdropFilter: 'blur(10px)',
+                '& .MuiAlert-message': {
+                  fontWeight: 500,
+                }
+              }}
+            >
               {error}
             </Alert>
           )}
           
           {/* Navigation */}
-          <Box display="flex" justifyContent="space-between" mt={4}>
+          <Box 
+            display="flex" 
+            justifyContent="space-between" 
+            mt={6}
+            sx={{
+              pt: 3,
+              borderTop: '1px solid rgba(99, 102, 241, 0.1)',
+            }}
+          >
             <Button
               disabled={activeStep === 0}
               onClick={handleBack}
               startIcon={<ArrowBack />}
+              size="large"
+              sx={{
+                borderRadius: 4,
+                px: 3,
+                py: 1.5,
+                fontWeight: 600,
+                textTransform: 'none',
+                color: '#2563eb',
+                border: '1px solid rgba(37, 99, 235, 0.3)',
+                background: 'rgba(37, 99, 235, 0.05)',
+                '&:hover': {
+                  background: 'rgba(37, 99, 235, 0.1)',
+                  borderColor: '#2563eb',
+                  boxShadow: '0 2px 8px rgba(37, 99, 235, 0.2)',
+                },
+                '&:disabled': {
+                  background: 'rgba(37, 99, 235, 0.03)',
+                  color: 'rgba(37, 99, 235, 0.4)',
+                  border: '1px solid rgba(37, 99, 235, 0.1)',
+                }
+              }}
             >
               Назад
             </Button>
@@ -721,6 +999,26 @@ const CreateOrderPage: React.FC = () => {
                   onClick={handleNext}
                   disabled={!canProceedToNextStep()}
                   endIcon={<ArrowForward />}
+                  size="large"
+                  sx={{
+                    borderRadius: 4,
+                    px: 4,
+                    py: 1.5,
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    background: '#2563eb',
+                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+                    '&:hover': {
+                      background: '#1d4ed8',
+                      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+                    },
+                    '&:disabled': {
+                      background: 'rgba(37, 99, 235, 0.3)',
+                      color: 'rgba(255, 255, 255, 0.7)',
+                      boxShadow: 'none',
+                    }
+                  }}
                 >
                   Далее
                 </Button>
@@ -731,6 +1029,29 @@ const CreateOrderPage: React.FC = () => {
                   disabled={loading || !canProceedToNextStep()}
                   startIcon={loading ? <CircularProgress size={20} /> : <CheckCircle />}
                   size="large"
+                  sx={{
+                    borderRadius: 4,
+                    px: 5,
+                    py: 2,
+                    fontSize: '1.1rem',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    background: loading 
+                      ? 'rgba(37, 99, 235, 0.6)'
+                      : '#10b981',
+                    boxShadow: loading 
+                      ? 'none'
+                      : '0 4px 12px rgba(16, 185, 129, 0.3)',
+                    '&:hover': !loading ? {
+                      background: '#059669',
+                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+                    } : {},
+                    '&:disabled': {
+                      background: 'rgba(37, 99, 235, 0.3)',
+                      color: 'rgba(255, 255, 255, 0.7)',
+                      boxShadow: 'none',
+                    }
+                  }}
                 >
                   {loading ? 'Создание...' : 'Создать заказ'}
                 </Button>

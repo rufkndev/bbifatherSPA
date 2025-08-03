@@ -6,7 +6,9 @@ import {
   Typography, 
   Box,
   Chip,
-  IconButton
+  IconButton,
+  Container,
+  Badge
 } from '@mui/material';
 import { 
   Home,
@@ -34,67 +36,128 @@ function App() {
   };
 
   return (
-    <Box sx={{ flexGrow: 1, minHeight: '100vh', bgcolor: 'grey.50' }}>
+    <Box 
+      sx={{ 
+        flexGrow: 1, 
+        minHeight: '100vh',
+        background: '#f8fafc',
+      }}
+    >
       <AppBar 
-        position="static" 
-        elevation={2}
+        position="fixed" 
+        elevation={0}
+        sx={{ 
+          background: '#ffffff',
+          borderBottom: '1px solid #e2e8f0',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+        }}
       >
-        <Toolbar>
-          <School sx={{ mr: 2 }} />
-          <Typography 
-            variant="h6" 
-            component={Link}
-            to="/"
-            sx={{ 
-              flexGrow: 1, 
-              fontWeight: 600,
-              textDecoration: 'none',
-              color: 'inherit',
-              '&:hover': { opacity: 0.8 }
-            }}
-          >
-            BBI Father
-          </Typography>
-          
-          <Chip 
-            label={getPageTitle()}
-            color="secondary"
-            variant="filled"
-            sx={{ mr: 2 }}
-          />
-          
-          <Box display="flex" gap={1}>
-            <IconButton 
-              color="inherit" 
-              component={Link} 
+        <Container maxWidth="xl">
+          <Toolbar sx={{ py: 1 }}>
+            <Box 
+              sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                mr: 3,
+                background: '#2563eb',
+                borderRadius: '8px',
+                p: 1.5,
+                color: 'white'
+              }}
+            >
+              <School sx={{ fontSize: 24 }} />
+            </Box>
+            
+            <Typography 
+              variant="h5" 
+              component={Link}
               to="/"
               sx={{ 
-                bgcolor: location.pathname === '/' ? 'rgba(255,255,255,0.2)' : 'transparent'
+                flexGrow: 1, 
+                fontWeight: 700,
+                textDecoration: 'none',
+                color: '#1e293b',
+                transition: 'all 0.2s ease',
+                '&:hover': { 
+                  color: '#2563eb',
+                }
               }}
             >
-              <Home />
-            </IconButton>
+              BBI Father
+            </Typography>
             
-            <IconButton 
-              color="inherit" 
-              component={Link} 
-              to="/create"
+            <Chip 
+              label={getPageTitle()}
               sx={{ 
-                bgcolor: location.pathname === '/create' ? 'rgba(255,255,255,0.2)' : 'transparent'
+                mr: 3,
+                background: 'rgba(37, 99, 235, 0.1)',
+                color: '#2563eb',
+                fontWeight: 600,
+                fontSize: '0.85rem',
+                border: '1px solid rgba(37, 99, 235, 0.2)',
+                '&:hover': {
+                  background: 'rgba(37, 99, 235, 0.2)',
+                }
               }}
-            >
-              <Add />
-            </IconButton>
-          </Box>
-        </Toolbar>
+            />
+            
+            <Box display="flex" gap={1}>
+              <IconButton 
+                component={Link} 
+                to="/"
+                sx={{ 
+                  borderRadius: '4px',
+                  p: 1.5,
+                  background: location.pathname === '/' 
+                    ? '#2563eb' 
+                    : 'rgba(37, 99, 235, 0.1)',
+                  color: location.pathname === '/' ? 'white' : '#2563eb',
+                  border: '1px solid rgba(37, 99, 235, 0.2)',
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    background: location.pathname === '/' 
+                      ? '#1d4ed8'
+                      : 'rgba(37, 99, 235, 0.2)',
+                  }
+                }}
+              >
+                <Home />
+              </IconButton>
+              
+              <IconButton 
+                component={Link} 
+                to="/create"
+                sx={{ 
+                  borderRadius: '4px',
+                  p: 1.5,
+                  background: location.pathname === '/create' 
+                    ? '#2563eb' 
+                    : 'rgba(37, 99, 235, 0.1)',
+                  color: location.pathname === '/create' ? 'white' : '#2563eb',
+                  border: '1px solid rgba(37, 99, 235, 0.2)',
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    background: location.pathname === '/create' 
+                      ? '#1d4ed8'
+                      : 'rgba(37, 99, 235, 0.2)',
+                  }
+                }}
+              >
+                <Add />
+              </IconButton>
+            </Box>
+          </Toolbar>
+        </Container>
       </AppBar>
       
-      <Box sx={{ minHeight: 'calc(100vh - 64px)' }}>
-        <Routes>
-          <Route path="/" element={<OrdersPage />} />
-          <Route path="/create" element={<CreateOrderPage />} />
-          <Route path="/admin" element={<AdminPage />} />
-        </Routes>
+      <Box sx={{ pt: 10, minHeight: '100vh', px: 2 }}>
+        <Container maxWidth="xl" sx={{ py: 2 }}>
+          <Routes>
+            <Route path="/" element={<OrdersPage />} />
+            <Route path="/create" element={<CreateOrderPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+          </Routes>
+        </Container>
       </Box>
     </Box>
   );
