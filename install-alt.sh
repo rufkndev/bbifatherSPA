@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# Скрипт установки BBIFather SPA на сервер
+# Альтернативный скрипт установки через snap
 
 set -e
 
-echo "🚀 Установка BBIFather SPA на сервер..."
+echo "🚀 Альтернативная установка BBIFather SPA..."
 
 # Проверяем права root
 if [ "$EUID" -ne 0 ]; then
-    echo "❌ Запустите скрипт от имени root: sudo ./install.sh"
+    echo "❌ Запустите скрипт от имени root: sudo ./install-alt.sh"
     exit 1
 fi
 
@@ -17,12 +17,11 @@ echo "📦 Установка зависимостей..."
 apt update
 
 # Устанавливаем Python, Nginx и Certbot
-apt install -y python3 python3-pip python3-venv nginx certbot python3-certbot-nginx curl
+apt install -y python3 python3-pip python3-venv nginx certbot python3-certbot-nginx snapd
 
-# Устанавливаем Node.js и npm из NodeSource репозитория
-echo "📦 Установка Node.js и npm..."
-curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-apt install -y nodejs
+# Устанавливаем Node.js через snap
+echo "📦 Установка Node.js через snap..."
+snap install node --classic
 
 # Создаем директории
 echo "📁 Создание директорий..."
@@ -83,7 +82,3 @@ echo "   systemctl daemon-reload"
 echo "   systemctl enable bbifather-backend bbifather-bot"
 echo "   systemctl start bbifather-backend bbifather-bot"
 echo "   systemctl reload nginx"
-echo ""
-echo "4. Проверьте статус:"
-echo "   systemctl status bbifather-backend"
-echo "   systemctl status bbifather-bot"
