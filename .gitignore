@@ -1,8 +1,8 @@
 # Environment variables
 .env
 
-# Database
-data/
+# Database (только в корне проекта)
+/data/
 *.db
 *.sqlite
 
