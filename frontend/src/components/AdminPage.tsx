@@ -36,6 +36,7 @@ const statusColors = {
   [OrderStatus.PAID]: 'info',
   [OrderStatus.IN_PROGRESS]: 'secondary',
   [OrderStatus.COMPLETED]: 'success',
+  [OrderStatus.NEEDS_REVISION]: 'error',
 } as const;
 
 const statusLabels = {
@@ -44,6 +45,7 @@ const statusLabels = {
   [OrderStatus.PAID]: 'Оплачен',
   [OrderStatus.IN_PROGRESS]: 'В работе',
   [OrderStatus.COMPLETED]: 'Выполнен',
+  [OrderStatus.NEEDS_REVISION]: 'Нужны исправления',
 };
 
 const AdminPage: React.FC = () => {
@@ -266,6 +268,25 @@ const AdminPage: React.FC = () => {
                 <Typography variant="body2" gutterBottom sx={{ mt: 1 }}>
                   <strong>Дополнительные требования:</strong> {selectedOrder.input_data}
                 </Typography>
+              )}
+              
+              {/* Информация об исправлениях */}
+              {selectedOrder.status === OrderStatus.NEEDS_REVISION && (
+                <Box sx={{ mt: 2, p: 2, bgcolor: '#ffebee', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" color="error" gutterBottom>
+                    🔄 Запрошены исправления
+                  </Typography>
+                  {selectedOrder.revision_comment && (
+                    <Typography variant="body2" gutterBottom sx={{ mt: 1 }}>
+                      <strong>Комментарий:</strong> {selectedOrder.revision_comment}
+                    </Typography>
+                  )}
+                  {selectedOrder.revision_grade && (
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      <strong>Оценка из Moodle:</strong> {selectedOrder.revision_grade}
+                    </Typography>
+                  )}
+                </Box>
               )}
               
               <Box sx={{ mt: 3 }}>

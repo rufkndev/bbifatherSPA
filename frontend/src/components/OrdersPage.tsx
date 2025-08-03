@@ -9,19 +9,24 @@ import {
   Chip,
   Grid,
   CircularProgress,
-
   LinearProgress,
   CardActions,
-  Stack
+  Stack,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField
 } from '@mui/material';
 import {
   Add as AddIcon,
   CalendarToday,
   AttachFile,
-  FileDownload
+  FileDownload,
+  Edit as EditIcon
 } from '@mui/icons-material';
 import { Order, OrderStatus } from '../types';
-import { getOrders, downloadFile, downloadAllFiles, api } from '../api';
+import { getOrders, downloadFile, downloadAllFiles, api, requestOrderRevision } from '../api';
 import { format, differenceInDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
@@ -56,6 +61,12 @@ const statusConfig = {
     icon: '✅',
     progress: 100
   },
+  [OrderStatus.NEEDS_REVISION]: { 
+    color: 'error' as const, 
+    label: 'Нужны исправления', 
+    icon: '🔄',
+    progress: 80
+  },
 
 };
 
@@ -64,6 +75,13 @@ const OrdersPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(new Set());
   const [paymentNotifications, setPaymentNotifications] = useState<Set<number>>(new Set());
+  
+  // Состояние для модального окна исправлений
+  const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
+  const [selectedOrderForRevision, setSelectedOrderForRevision] = useState<Order | null>(null);
+  const [revisionComment, setRevisionComment] = useState('');
+  const [revisionGrade, setRevisionGrade] = useState('');
+  const [submittingRevision, setSubmittingRevision] = useState(false);
 
   useEffect(() => {
     loadOrders();
@@ -135,6 +153,54 @@ const OrdersPage: React.FC = () => {
       console.error('Ошибка отправки уведомления об оплате:', error);
       alert('Ошибка отправки уведомления. Попробуйте еще раз.');
     }
+  };
+
+  const handleRequestRevision = (order: Order) => {
+    setSelectedOrderForRevision(order);
+    setRevisionComment('');
+    setRevisionGrade('');
+    setRevisionDialogOpen(true);
+  };
+
+  const handleSubmitRevision = async () => {
+    if (!selectedOrderForRevision || !selectedOrderForRevision.id || !revisionComment.trim()) {
+      alert('Пожалуйста, введите комментарий к исправлениям');
+      return;
+    }
+
+    try {
+      setSubmittingRevision(true);
+      const updatedOrder = await requestOrderRevision(
+        selectedOrderForRevision.id,
+        revisionComment.trim(),
+        revisionGrade.trim() || undefined
+      );
+      
+      // Обновляем заказ в списке
+      setOrders(prev => prev.map(order => 
+        order.id === updatedOrder.id ? updatedOrder : order
+      ));
+      
+      setRevisionDialogOpen(false);
+      setSelectedOrderForRevision(null);
+      setRevisionComment('');
+      setRevisionGrade('');
+      
+      alert('✅ Запрос на исправления отправлен!');
+      console.log(`✅ Запрос исправлений отправлен для заказа #${selectedOrderForRevision.id}`);
+    } catch (error) {
+      console.error('Ошибка отправки запроса исправлений:', error);
+      alert('Ошибка отправки запроса. Попробуйте еще раз.');
+    } finally {
+      setSubmittingRevision(false);
+    }
+  };
+
+  const handleCloseRevisionDialog = () => {
+    setRevisionDialogOpen(false);
+    setSelectedOrderForRevision(null);
+    setRevisionComment('');
+    setRevisionGrade('');
   };
 
   const getDeadlineStatus = (deadline: string) => {
@@ -510,9 +576,36 @@ const OrdersPage: React.FC = () => {
                         )}
                       </Box>
                       
-                      <Typography variant="h6" color="primary" sx={{ fontWeight: 600 }}>
-                        #{order.id}
-                      </Typography>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        {/* Кнопка "Нужны исправления" для выполненных работ */}
+                        {order.status === OrderStatus.COMPLETED && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="error"
+                            startIcon={<EditIcon sx={{ fontSize: 14 }} />}
+                            onClick={() => handleRequestRevision(order)}
+                            sx={{ 
+                              fontSize: '0.75rem',
+                              px: 1.5,
+                              py: 0.5,
+                              textTransform: 'none',
+                              borderColor: 'error.light',
+                              '&:hover': {
+                                borderColor: 'error.main',
+                                backgroundColor: 'error.light',
+                                color: 'white'
+                              }
+                            }}
+                          >
+                            Нужны исправления
+                          </Button>
+                        )}
+                        
+                        <Typography variant="h6" color="primary" sx={{ fontWeight: 600 }}>
+                          #{order.id}
+                        </Typography>
+                      </Box>
                     </Box>
                   </CardActions>
                 </Card>
@@ -522,8 +615,60 @@ const OrdersPage: React.FC = () => {
         </Grid>
       )}
 
-
-
+      {/* Модальное окно для запроса исправлений */}
+      <Dialog
+        open={revisionDialogOpen}
+        onClose={handleCloseRevisionDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Запрос исправлений
+          {selectedOrderForRevision && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Заказ: {selectedOrderForRevision.title}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <TextField
+              fullWidth
+              multiline
+              rows={4}
+              label="Комментарий преподавателя из Moodle *"
+              value={revisionComment}
+              onChange={(e) => setRevisionComment(e.target.value)}
+              placeholder="Вставьте комментарий преподавателя из системы Moodle..."
+              helperText="Скопируйте комментарий преподавателя из Moodle с указанием, что нужно исправить"
+              sx={{ mb: 3 }}
+            />
+            
+            <TextField
+              fullWidth
+              label="Оценка из Moodle (необязательно)"
+              value={revisionGrade}
+              onChange={(e) => setRevisionGrade(e.target.value)}
+              placeholder="Например: 3.5, зачтено, незачтено, 85 баллов"
+              helperText="Укажите оценку, которую поставил преподаватель в Moodle"
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={handleCloseRevisionDialog}>
+            Отмена
+          </Button>
+          <Button
+            onClick={handleSubmitRevision}
+            variant="contained"
+            color="error"
+            disabled={submittingRevision || !revisionComment.trim()}
+            startIcon={submittingRevision ? <CircularProgress size={20} /> : undefined}
+          >
+            {submittingRevision ? 'Отправка...' : 'Отправить запрос'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
     </Box>
   );

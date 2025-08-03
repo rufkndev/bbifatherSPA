@@ -52,6 +52,7 @@ class NotificationHandler(BaseHTTPRequestHandler):
             
             # Потом обрабатываем уведомление
             print(f"📨 Получен webhook: {self.path}")
+            print(f"🔍 Данные webhook: {json.dumps(data, indent=2, ensure_ascii=False)}")
             
             if self.path == '/webhook/new_order':
                 self.handle_new_order(data)
@@ -62,17 +63,105 @@ class NotificationHandler(BaseHTTPRequestHandler):
             elif self.path == '/webhook/payment_notification':
                 print("💰 Обрабатываем уведомление об оплате")
                 self.handle_payment_notification(data)
+            elif self.path == '/webhook/revision_request':
+                print("🔄 Обрабатываем запрос исправлений")
+                self.handle_revision_request(data)
+            elif self.path == '/webhook/test':
+                print("🧪 Тестовый webhook")
+                self.handle_test()
             else:
                 print(f"❓ Неизвестный webhook: {self.path}")
             
         except Exception as e:
             print(f"❌ Ошибка обработки webhook: {e}")
+            import traceback
+            traceback.print_exc()
             try:
                 self.send_response(500)
                 self.end_headers()
                 self.wfile.write(b'Error')
             except:
                 pass  # Игнорируем ошибки отправки ответа
+    
+    def do_GET(self):
+        """Обработка GET запросов для тестирования"""
+        if self.path == '/webhook/test' or self.path == '/' or self.path == '/status':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html; charset=utf-8')
+            self.end_headers()
+            response = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>StudyOrders Bot Status</title>
+    <style>
+        body {{ font-family: Arial; margin: 20px; }}
+        .status {{ color: green; }}
+        .error {{ color: red; }}
+        button {{ padding: 10px; margin: 5px; }}
+    </style>
+</head>
+<body>
+    <h1>🤖 StudyOrders Notification Bot</h1>
+    <p class="status">✅ Бот работает! Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</p>
+    <h2>🔧 Настройки:</h2>
+    <ul>
+        <li>BOT_TOKEN: {'<span class="status">✅ настроен</span>' if BOT_TOKEN else '<span class="error">❌ не настроен</span>'}</li>
+        <li>CHAT_ID: {'<span class="status">✅ настроен</span>' if CHAT_ID else '<span class="error">❌ не настроен</span>'}</li>
+        <li>PORT: {PORT}</li>
+    </ul>
+    
+    <h2>🧪 Тестирование</h2>
+    <button onclick="testNotification()">🧪 Отправить тестовое уведомление</button>
+    <button onclick="testRevision()">🔄 Тест уведомления об исправлениях</button>
+    
+    <div id="result"></div>
+    
+    <script>
+    function testNotification() {{
+        fetch('/webhook/test', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{test: true, timestamp: new Date().toISOString()}})
+        }}).then(response => {{
+            document.getElementById('result').innerHTML = '<p class="status">✅ Тестовое уведомление отправлено!</p>';
+        }}).catch(err => {{
+            document.getElementById('result').innerHTML = '<p class="error">❌ Ошибка: ' + err + '</p>';
+        }});
+    }}
+    
+    function testRevision() {{
+        fetch('/webhook/revision_request', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{
+                order_id: 999,
+                order_title: 'Тестовая работа',
+                student_name: 'Тестовый Студент',
+                student_group: 'ТЕСТ-00',
+                student_telegram: '@test_user',
+                subject_name: 'Тестовый предмет',
+                comment: 'Тестовый комментарий об исправлениях',
+                grade: '4.5',
+                deadline: '2024-12-31'
+            }})
+        }}).then(response => {{
+            document.getElementById('result').innerHTML = '<p class="status">✅ Тестовое уведомление об исправлениях отправлено!</p>';
+        }}).catch(err => {{
+            document.getElementById('result').innerHTML = '<p class="error">❌ Ошибка: ' + err + '</p>';
+        }});
+    }}
+    </script>
+</body>
+</html>
+            """.encode('utf-8')
+            self.wfile.write(response)
+        else:
+            self.send_response(404)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'404 Not Found')
     
     def handle_new_order(self, data):
         # Подготавливаем дополнительные поля
@@ -220,6 +309,48 @@ class NotificationHandler(BaseHTTPRequestHandler):
                 print("   📝 Добавьте TELEGRAM_BOT_TOKEN в .env файл")
             if not CHAT_ID:
                 print("   📝 Добавьте TELEGRAM_CHAT_ID в .env файл")
+    
+    def handle_revision_request(self, data):
+        """Обработка запроса исправлений"""
+        print(f"🔄 Начинаем обработку запроса исправлений")
+        print(f"🔍 Полученные данные: {data}")
+        
+        order_id = data.get('order_id', 'N/A')
+        order_title = data.get('order_title', 'N/A')
+        student_name = data.get('student_name', 'N/A')
+        student_group = data.get('student_group', 'N/A')
+        student_telegram = data.get('student_telegram', 'N/A')
+        subject_name = data.get('subject_name', 'N/A')
+        comment = data.get('comment', '')
+        grade = data.get('grade')
+        deadline = data.get('deadline', 'N/A')
+        
+        message = f"""
+🔄 Запрошены исправления для заказа #{order_id}
+
+📝 Заказ: {order_title}
+👤 Студент: {student_name}
+👥 Группа: {student_group}
+📱 Telegram: {student_telegram}
+📚 Предмет: {subject_name}
+⏰ Дедлайн: {deadline}
+
+💬 Комментарий к исправлениям:
+{comment[:500]}{'...' if len(comment) > 500 else ''}
+        """.strip()
+        
+        if grade:
+            message += f"\n\n⭐ Оценка из Moodle: {grade}"
+        
+        message += f"\n\nЗапрос отправлен: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+        
+        self.send_notification(message)
+    
+    def handle_test(self):
+        """Тестовый обработчик для проверки работы бота"""
+        print("🧪 Тестовый запрос получен")
+        message = f"🧪 Тест бота - {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+        self.send_notification(message)
 
 def run_server():
     """Запуск HTTP сервера для webhook'ов"""

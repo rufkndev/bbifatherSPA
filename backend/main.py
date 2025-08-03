@@ -205,6 +205,19 @@ def init_database():
         print("✅ Добавлен столбец actual_price")
     except sqlite3.OperationalError:
         pass
+        
+    # Миграции для полей исправлений
+    try:
+        cursor.execute("ALTER TABLE orders ADD COLUMN revision_comment TEXT")
+        print("✅ Добавлен столбец revision_comment")
+    except sqlite3.OperationalError:
+        pass
+        
+    try:
+        cursor.execute("ALTER TABLE orders ADD COLUMN revision_grade TEXT")
+        print("✅ Добавлен столбец revision_grade")
+    except sqlite3.OperationalError:
+        pass
     
     # Добавляем базовые предметы
     cursor.execute("SELECT COUNT(*) FROM subjects")
@@ -228,14 +241,21 @@ def init_database():
 def send_notification(endpoint: str, data: dict):
     """Отправка уведомления боту"""
     try:
-        print(f"📤 Отправляем уведомление: {BOT_URL}/webhook/{endpoint}")
-        response = requests.post(f"{BOT_URL}/webhook/{endpoint}", json=data, timeout=30)
+        url = f"{BOT_URL}/webhook/{endpoint}"
+        print(f"📤 Отправляем уведомление: {url}")
+        print(f"🔍 Данные для отправки: {data}")
+        response = requests.post(url, json=data, timeout=30)
         print(f"✅ Уведомление отправлено, статус: {response.status_code}")
+        if response.status_code != 200:
+            print(f"⚠️ Ответ сервера: {response.text}")
     except requests.exceptions.RequestException as e:
         print(f"❌ Ошибка отправки уведомления: {e}")
         print(f"🔧 Проверьте что бот запущен на {BOT_URL}")
+        print(f"💡 Для проверки откройте: {BOT_URL}/webhook/test")
     except Exception as e:
         print(f"❌ Неожиданная ошибка: {e}")
+        import traceback
+        traceback.print_exc()
 
 # Инициализация БД при запуске
 @app.on_event("startup")
@@ -834,6 +854,76 @@ async def notify_payment(order_id: int):
         traceback.print_exc()
     
     return {"status": "notification_sent", "order_id": order_id}
+
+@app.post("/api/orders/{order_id}/request-revision")
+async def request_order_revision(order_id: int, request: Request):
+    """Запрос исправлений для заказа"""
+    data = await request.json()
+    comment = data.get('comment', '')
+    grade = data.get('grade')
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Получаем информацию о заказе
+    cursor.execute("""
+        SELECT 
+            o.id, o.title, o.status, o.description, o.input_data, o.variant_info, o.deadline,
+            s.name as student_name,
+            s.group_name as student_group,
+            s.telegram as student_telegram,
+            sub.name as subject_name,
+            sub.price as subject_price
+        FROM orders o
+        JOIN students s ON o.student_id = s.id
+        JOIN subjects sub ON o.subject_id = sub.id
+        WHERE o.id = ?
+    """, (order_id,))
+    
+    order_data = cursor.fetchone()
+    if not order_data:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Заказ не найден")
+    
+    order = dict(order_data)
+    
+    # Обновляем заказ на статус "требуют исправления"
+    cursor.execute("""
+        UPDATE orders 
+        SET status = 'needs_revision', 
+            revision_comment = ?, 
+            revision_grade = ?, 
+            updated_at = CURRENT_TIMESTAMP 
+        WHERE id = ?
+    """, (comment, grade, order_id))
+    
+    if cursor.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Заказ не найден")
+    
+    conn.commit()
+    conn.close()
+    
+    # Отправляем уведомление админу о необходимости исправлений
+    try:
+        notification_data = {
+            'order_id': order_id,
+            'order_title': order['title'],
+            'student_name': order['student_name'],
+            'student_group': order['student_group'],
+            'student_telegram': order['student_telegram'],
+            'subject_name': order['subject_name'],
+            'comment': comment,
+            'grade': grade,
+            'deadline': order['deadline']
+        }
+        send_notification('revision_request', notification_data)
+        print(f"🔄 Отправлено уведомление о запросе исправлений для заказа #{order_id}")
+    except Exception as e:
+        print(f"❌ Ошибка отправки уведомления о исправлениях: {e}")
+    
+    # Возвращаем обновленный заказ
+    return get_order(order_id)
 
 @app.post("/api/test-bot-connection")
 async def test_bot_connection():

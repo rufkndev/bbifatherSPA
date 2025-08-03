@@ -42,6 +42,14 @@ export const markOrderAsPaid = async (id: number): Promise<Order> => {
   return response.data;
 };
 
+export const requestOrderRevision = async (id: number, comment: string, grade?: string): Promise<Order> => {
+  const response = await api.post(`/api/orders/${id}/request-revision`, { 
+    comment, 
+    grade 
+  });
+  return response.data;
+};
+
 export const uploadOrderFiles = async (id: number, files: FileList): Promise<Order> => {
   const formData = new FormData();
   Array.from(files).forEach(file => {

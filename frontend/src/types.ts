@@ -19,7 +19,8 @@ export enum OrderStatus {
   WAITING_PAYMENT = 'waiting_payment',
   PAID = 'paid',
   IN_PROGRESS = 'in_progress',
-  COMPLETED = 'completed'
+  COMPLETED = 'completed',
+  NEEDS_REVISION = 'needs_revision'
 }
 
 export interface Order {
@@ -39,6 +40,10 @@ export interface Order {
   selected_works?: string;
   is_full_course?: boolean;
   actual_price?: number;
+  
+  // Поля для исправлений
+  revision_comment?: string;
+  revision_grade?: string;
   
   // Связанные данные
   student?: Student;
