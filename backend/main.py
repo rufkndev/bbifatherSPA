@@ -22,39 +22,26 @@ app = FastAPI(
 # Настройка CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://frontend:3000"],
+    allow_origins=["https://bbifather.ru", "https://www.bbifather.ru"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-def load_env():
-    """Загружает переменные из .env файла"""
-    env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
-    if os.path.exists(env_path):
-        print(f"📄 Читаю .env из: {env_path}")
-        with open(env_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    os.environ[key.strip()] = value.strip()
-        print("✅ .env файл загружен")
-    else:
-        print(f"⚠️  .env файл не найден: {env_path}")
+# Переменные окружения теперь передаются через docker-compose
+# поэтому функция load_env() и ее вызов больше не нужны.
 
-# Загружаем .env
-load_env()
+# Пути для данных и загрузок внутри контейнера
+DATA_DIR = "/data"
+UPLOADS_DIR = os.path.join(DATA_DIR, "uploads")
+DATABASE_PATH = os.path.join(DATA_DIR, "database.db")
 
-# Создание директорий для файлов
-os.makedirs("data", exist_ok=True)
-os.makedirs("data/uploads", exist_ok=True)
-
-# Путь к базе данных
-DATABASE_PATH = "data/database.db"
+# Создание директорий при запуске (теперь это делается в Dockerfile)
+# os.makedirs(DATA_DIR, exist_ok=True)
+# os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 # Настройки для уведомлений
-BOT_URL = "http://localhost:8080"
+BOT_URL = "http://bot:8080"
 
 def get_db_connection():
     """Получение подключения к базе данных"""

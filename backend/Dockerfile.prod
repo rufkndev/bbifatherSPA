@@ -1,0 +1,21 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Устанавливаем Gunicorn вместе с другими зависимостями
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# Создаем директории и пользователя
+RUN mkdir -p /data/uploads && \
+    useradd -m appuser && \
+    chown -R appuser:appuser /data
+
+USER appuser
+
+EXPOSE 8000
+
+# Запускаем приложение через Gunicorn
+CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "-w", "4", "-b", "0.0.0.0:8000", "main:app"]
