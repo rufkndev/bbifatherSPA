@@ -1,0 +1,17 @@
+[Unit]
+Description=BBIFather Backend API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/bbifather/backend
+Environment=DATABASE_URL=sqlite:///var/www/bbifather/data/database.db
+Environment=TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN
+Environment=TELEGRAM_CHAT_ID=YOUR_CHAT_ID
+ExecStart=/usr/bin/python3 -m gunicorn -k uvicorn.workers.UvicornWorker -w 4 -b 127.0.0.1:8000 main:app
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
