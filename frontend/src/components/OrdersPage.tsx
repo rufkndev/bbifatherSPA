@@ -310,7 +310,7 @@ const OrdersPage: React.FC = () => {
                   </CardContent>
                   <CardActions sx={{ p: 2, flexDirection: 'column', alignItems: 'stretch', gap: 2 }}>
                      {/* Блок для статуса "ожидание оплаты" */}
-                     {order.status === 'waiting_payment' && !isAdminView && (
+                     {order.status === OrderStatus.WAITING_PAYMENT && !isAdminView && (
                        <Box sx={{ p: 2, bgcolor: '#fff3cd', borderRadius: 2, border: '1px solid #ffeaa7' }}>
                          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#856404' }}>
                            💳 Реквизиты для оплаты
@@ -345,7 +345,7 @@ const OrdersPage: React.FC = () => {
                      )}
 
                      {/* Блок для статуса "выполнено" */}
-                     {order.status === 'completed' && !isAdminView && (
+                     {order.status === OrderStatus.COMPLETED && !isAdminView && (
                        <Box sx={{ p: 2, bgcolor: '#d4edda', borderRadius: 2, border: '1px solid #c3e6cb' }}>
                          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#155724' }}>
                            ✅ Работа выполнена
