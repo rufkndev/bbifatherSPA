@@ -1,11 +1,6 @@
 # Environment variables
 .env
 
-# Database (только в корне проекта)
-/data/
-*.db
-*.sqlite
-
 # Logs
 logs/
 *.log
