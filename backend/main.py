@@ -156,56 +156,59 @@ def get_orders(page: int = 1, limit: int = 10, telegram: str = None):
             subjects!inner(id, name, description, price)
         """)
 
-        count_query = supabase.table('orders').select('id', count='exact')
+        count_query = supabase.table('orders').select('id', count='exact', head=True)
 
         if telegram:
-            # Убедимся, что никнейм чистый (без @)
             clean_telegram = telegram.lstrip('@')
-            query = query.eq('students.telegram', clean_telegram)
-            count_query = count_query.eq('students.telegram', clean_telegram)
+            
+            # 1. Найти студента по telegram
+            student_response = supabase.table('students').select('id').eq('telegram', clean_telegram).limit(1).execute()
+            
+            if not student_response.data:
+                # Если студент не найден, возвращаем пустой список
+                return {"orders": [], "total": 0}
+                
+            student_id = student_response.data[0]['id']
+            
+            # 2. Фильтровать заказы по student_id
+            query = query.eq('student_id', student_id)
+            count_query = count_query.eq('student_id', student_id)
 
         # Получаем заказы с пагинацией
         response = query.order('created_at', desc=True).range(offset, offset + limit - 1).execute()
         
-        orders = []
-        for order in response.data:
-            # Парсим файлы
-            if order.get('files'):
-                try:
-                    order['files'] = json.loads(order['files']) if isinstance(order['files'], str) else order['files']
-                except:
-                    order['files'] = []
-            else:
-                order['files'] = []
-            
-            # Преобразуем связанные данные
-            order['student'] = {
-                'id': order['students']['id'],
-                'name': order['students']['name'],
-                'group': order['students']['group_name'],
-                'telegram': order['students']['telegram']
-            }
-            order['subject'] = {
-                'id': order['subjects']['id'],
-                'name': order['subjects']['name'],
-                'description': order['subjects']['description'],
-                'price': order['subjects']['price']
-            }
-            
-            # Удаляем вложенные объекты
-            del order['students']
-            del order['subjects']
-            
-            orders.append(order)
-        
         # Получаем общее количество
         total_response = count_query.execute()
-        total = total_response.count
+        total = total_response.count if total_response.count is not None else 0
+
+        orders = []
+        for order_data in response.data:
+            # Преобразуем данные в нужный формат
+            order = {
+                **order_data,
+                'student': {
+                    'id': order_data['students']['id'],
+                    'name': order_data['students']['name'],
+                    'group': order_data['students']['group_name'],
+                    'telegram': order_data['students']['telegram']
+                },
+                'subject': {
+                    'id': order_data['subjects']['id'],
+                    'name': order_data['subjects']['name'],
+                    'description': order_data['subjects']['description'],
+                    'price': order_data['subjects']['price']
+                },
+                'files': json.loads(order_data.get('files', '[]')) if isinstance(order_data.get('files'), str) else order_data.get('files', [])
+            }
+            del order['students']
+            del order['subjects']
+            orders.append(order)
         
         return {"orders": orders, "total": total}
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка получения заказов: {str(e)}")
+        print(f"❌ BACKEND: Ошибка получения заказов: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка на сервере при получении заказов: {str(e)}")
 
 @app.get("/api/orders/{order_id}")
 def get_order(order_id: int):
