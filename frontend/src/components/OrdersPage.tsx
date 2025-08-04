@@ -381,7 +381,7 @@ const OrdersPage: React.FC = () => {
                           {format(new Date(order.deadline), 'dd MMM yyyy', { locale: ru })} ({deadlineStatus.text})
                         </Typography>
                       </Box>
-                      {isAdminView && (
+                      {isAdminView && order.student && (
                         <Typography variant="body2" color="text.secondary">
                           <strong>Студент:</strong> {order.student.name} ({order.student.telegram})
                         </Typography>
