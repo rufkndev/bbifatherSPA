@@ -11,12 +11,36 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
 import requests
 from supabase import create_client, Client
+from dotenv import load_dotenv
+from contextlib import asynccontextmanager
+
+# Загружаем переменные из .env файла
+load_dotenv()
+
+# Функция для инициализации при запуске
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    if init_database():
+        print("🚀 Backend запущен с Supabase!")
+    else:
+        print("⚠️ Backend запущен без подключения к БД!")
+    
+    if BOT_TOKEN and BOT_CHAT_ID:
+        print("📱 Telegram уведомления настроены")
+    else:
+        print("⚠️ Telegram уведомления не настроены")
+    
+    yield
+    # Shutdown
+    print("👋 Backend остановлен")
 
 # Создаем приложение FastAPI
 app = FastAPI(
     title="Student Orders API",
     description="API для системы управления заказами практических работ",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Настройка CORS
@@ -91,18 +115,7 @@ def send_notification(message: str):
         print(f"❌ Ошибка отправки в Telegram: {e}")
         print(f"📱 УВЕДОМЛЕНИЕ: {message}")
 
-# Инициализация при запуске
-@app.on_event("startup")
-def startup_event():
-    if init_database():
-        print("🚀 Backend запущен с Supabase!")
-    else:
-        print("⚠️ Backend запущен без подключения к БД!")
-    
-    if BOT_TOKEN and BOT_CHAT_ID:
-        print("📱 Telegram уведомления настроены")
-    else:
-        print("⚠️ Telegram уведомления не настроены")
+# Старый startup удален - теперь используем lifespan
 
 # API Routes
 @app.get("/")
