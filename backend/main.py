@@ -392,56 +392,8 @@ async def update_order_status(order_id: int, request: Request):
         if not response.data:
             raise HTTPException(status_code=404, detail="Заказ не найден")
         
-        # Получаем обновленный заказ
-        updated_order = get_order(order_id)
-        
-        # Отправляем уведомления в зависимости от статуса
-        try:
-            if status == 'waiting_payment':
-                message = f"""
-💰 Заказ #{order_id} ожидает оплаты
-
-📝 Название: {updated_order['title']}
-👤 Студент: {updated_order['student']['name']}
-👥 Группа: {updated_order['student']['group']}
-📱 Telegram: {updated_order['student']['telegram']}
-
-📚 Предмет: {updated_order['subject']['name']}
-⏰ Дедлайн: {updated_order['deadline']}
-💰 Сумма к оплате: {updated_order.get('actual_price', updated_order['subject']['price'])} ₽
-
-ℹ️ Студент увидит реквизиты для оплаты в своем заказе
-                """.strip()
-                send_notification(message)
-                
-            elif status == 'completed':
-                # Проверяем, был ли это повторный перевод в статус "выполнено" после исправлений
-                was_revision = updated_order.get('revision_comment') is not None
-                
-                message = f"""
-✅ Заказ #{order_id} выполнен{' (после исправлений)' if was_revision else ''}!
-
-📝 Название: {updated_order['title']}
-👤 Студент: {updated_order['student']['name']}
-👥 Группа: {updated_order['student']['group']}
-📱 Telegram: {updated_order['student']['telegram']}
-
-📚 Предмет: {updated_order['subject']['name']}
-⏰ Дедлайн: {updated_order['deadline']}
-
-📎 {len(updated_order.get('files', []))} файл(ов) прикреплено
-ℹ️ Студент может запросить исправления, если необходимо
-                """.strip()
-                
-                if was_revision:
-                    message += f"\n\n🔄 Предыдущий комментарий к исправлениям:\n{updated_order.get('revision_comment', '')[:300]}{'...' if len(updated_order.get('revision_comment', '')) > 300 else ''}"
-                
-                send_notification(message)
-                
-        except Exception as e:
-            print(f"⚠️ Ошибка отправки уведомления о смене статуса: {e}")
-        
-        return updated_order
+        # Возвращаем обновленный заказ
+        return get_order(order_id)
         
     except Exception as e:
         if "No rows found" in str(e):
