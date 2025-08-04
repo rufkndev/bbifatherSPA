@@ -22,7 +22,7 @@ app = FastAPI(
 # Настройка CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://bbifather.ru", "https://www.bbifather.ru"],
+    allow_origins=["https://bbifather.ru", "https://www.bbifather.ru", "http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,17 +31,19 @@ app.add_middleware(
 # Переменные окружения теперь передаются через docker-compose
 # поэтому функция load_env() и ее вызов больше не нужны.
 
-# Пути для данных и загрузок внутри контейнера
-DATA_DIR = "/data"
+# Пути для данных и загрузок
+# Определяем путь относительно main.py файла backend
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
 UPLOADS_DIR = os.path.join(DATA_DIR, "uploads")
 DATABASE_PATH = os.path.join(DATA_DIR, "database.db")
 
-# Создание директорий при запуске (теперь это делается в Dockerfile)
-# os.makedirs(DATA_DIR, exist_ok=True)
-# os.makedirs(UPLOADS_DIR, exist_ok=True)
+# Создание директорий при запуске
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 # Настройки для уведомлений
-BOT_URL = "http://bot:8080"
+BOT_URL = "http://localhost:8080"
 
 def get_db_connection():
     """Получение подключения к базе данных"""
