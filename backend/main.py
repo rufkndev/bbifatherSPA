@@ -266,10 +266,10 @@ async def create_order(request: Request):
         student_data = data['student']
         
         # Проверяем существует ли студент
-        existing_student = supabase.table('students').select('id').eq('telegram', student_data['telegram']).single().execute()
+        existing_student = supabase.table('students').select('id').eq('telegram', student_data['telegram']).limit(1).execute()
         
-        if existing_student.data:
-            student_id = existing_student.data['id']
+        if existing_student.data and len(existing_student.data) > 0:
+            student_id = existing_student.data[0]['id']
             print(f"👤 Найден существующий студент ID: {student_id}")
             # Обновляем данные студента
             supabase.table('students').update({
@@ -288,12 +288,12 @@ async def create_order(request: Request):
         
         # Проверяем существование предмета
         subject_id = int(data['subject_id'])
-        subject = supabase.table('subjects').select('id, name').eq('id', subject_id).single().execute()
+        subject = supabase.table('subjects').select('id, name').eq('id', subject_id).limit(1).execute()
         
-        if not subject.data:
+        if not subject.data or len(subject.data) == 0:
             raise HTTPException(status_code=400, detail=f"Предмет с ID {subject_id} не найден")
         
-        print(f"📚 Предмет: {subject.data['name']} (ID: {subject_id})")
+        print(f"📚 Предмет: {subject.data[0]['name']} (ID: {subject_id})")
         
         # Подготавливаем данные заказа
         actual_price = data.get('actual_price', 0.0)
