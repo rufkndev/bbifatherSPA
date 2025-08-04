@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { Order, Subject, CreateOrderRequest, OrderListResponse, Student } from './types';
 
-const API_BASE_URL = '/';
+const API_BASE_URL = 'https://bbifather.ru/api';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
