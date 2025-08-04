@@ -1,4 +1,3 @@
-import sqlite3
 import json
 import os
 import shutil
@@ -11,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
 import requests
+from supabase import create_client, Client
 
 # Создаем приложение FastAPI
 app = FastAPI(
@@ -20,238 +20,89 @@ app = FastAPI(
 )
 
 # Настройка CORS
+FRONTEND_URLS = os.getenv("FRONTEND_URLS", "http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://bbifather.ru", "https://www.bbifather.ru", "http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=FRONTEND_URLS + ["https://bbifather.ru", "https://www.bbifather.ru"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# Переменные окружения теперь передаются через docker-compose
-# поэтому функция load_env() и ее вызов больше не нужны.
+# Переменные окружения
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+BOT_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    print("⚠️ SUPABASE_URL и SUPABASE_KEY должны быть установлены!")
+    print("Создайте .env файл или установите переменные окружения")
+
+# Инициализация Supabase клиента
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
 
 # Пути для данных и загрузок
-# Определяем путь относительно main.py файла backend
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-UPLOADS_DIR = os.path.join(DATA_DIR, "uploads")
-DATABASE_PATH = os.path.join(DATA_DIR, "database.db")
-
-# Создание директорий при запуске
-os.makedirs(DATA_DIR, exist_ok=True)
+UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
-# Настройки для уведомлений
-BOT_URL = "http://localhost:8080"
-
-def get_db_connection():
-    """Получение подключения к базе данных"""
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row  # Возвращает строки как dict
-    return conn
-
 def init_database():
-    """Инициализация базы данных"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    """Проверяем подключение к Supabase и готовность таблиц"""
+    if not supabase:
+        print("❌ Supabase клиент не инициализирован!")
+        return False
     
-    # Создаем таблицу студентов
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS students (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            group_name TEXT,
-            telegram TEXT,
-            email TEXT,
-            phone TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    
-    # Миграция: проверяем схему таблицы students
-    cursor.execute("PRAGMA table_info(students)")
-    columns_info = cursor.fetchall()
-    
-    # Проверяем если email или phone имеют NOT NULL ограничение
-    needs_migration = False
-    for column in columns_info:
-        column_name = column[1]  # name
-        not_null = column[3]     # notnull
-        if column_name in ['email', 'phone'] and not_null == 1:
-            needs_migration = True
-            break
-    
-    # Если нужна миграция - пересоздаем таблицу
-    if needs_migration:
-        print("🔄 Миграция таблицы students: убираем NOT NULL для email и phone")
-        
-        # Сохраняем существующие данные
-        cursor.execute("SELECT * FROM students")
-        existing_data = cursor.fetchall()
-        
-        # Удаляем старую таблицу
-        cursor.execute("DROP TABLE students")
-        
-        # Создаем новую таблицу с правильной схемой
-        cursor.execute("""
-            CREATE TABLE students (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                group_name TEXT,
-                telegram TEXT,
-                email TEXT,
-                phone TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Восстанавливаем данные
-        for row in existing_data:
-            cursor.execute("""
-                INSERT INTO students (id, name, group_name, telegram, email, phone, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (row[0], row[1], row[2] if len(row) > 2 else None, 
-                  row[3] if len(row) > 3 else None, row[4] if len(row) > 4 else None, 
-                  row[5] if len(row) > 5 else None, row[6] if len(row) > 6 else None))
-        
-        print("✅ Миграция завершена")
-    
-    # Добавляем новые столбцы если их нет
     try:
-        cursor.execute("ALTER TABLE students ADD COLUMN group_name TEXT")
-        print("✅ Добавлен столбец group_name")
-    except sqlite3.OperationalError:
-        # Столбец уже существует
-        pass
+        # Проверяем подключение
+        response = supabase.table('subjects').select('id').limit(1).execute()
+        print("✅ Подключение к Supabase установлено!")
         
-    try:
-        cursor.execute("ALTER TABLE students ADD COLUMN telegram TEXT")
-        print("✅ Добавлен столбец telegram")
-    except sqlite3.OperationalError:
-        # Столбец уже существует
-        pass
-    
-    # Создаем таблицу предметов
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS subjects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT,
-            price REAL NOT NULL DEFAULT 0.0,
-            is_active BOOLEAN DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    
-    # Создаем таблицу заказов
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS orders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_id INTEGER NOT NULL,
-            subject_id INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            description TEXT NOT NULL,
-            input_data TEXT,
-            variant_info TEXT,
-            deadline DATE NOT NULL,
-            status TEXT DEFAULT 'new',
-            is_paid BOOLEAN DEFAULT 0,
-            files TEXT,
-            selected_works TEXT,
-            is_full_course BOOLEAN DEFAULT 0,
-            actual_price REAL DEFAULT 0.0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (student_id) REFERENCES students (id),
-            FOREIGN KEY (subject_id) REFERENCES subjects (id)
-        )
-    """)
-    
-    # Миграция: добавляем столбец variant_info если его нет
-    try:
-        cursor.execute("ALTER TABLE orders ADD COLUMN variant_info TEXT")
-        print("✅ Добавлен столбец variant_info")
-    except sqlite3.OperationalError:
-        # Столбец уже существует
-        pass
+        # Проверяем есть ли базовые предметы
+        subjects_count = supabase.table('subjects').select('id', count='exact').execute()
+        if subjects_count.count == 0:
+            print("⚠️ В таблице subjects нет данных. Создайте предметы в Supabase Dashboard.")
         
-    # Миграции для новых столбцов
-    try:
-        cursor.execute("ALTER TABLE orders ADD COLUMN selected_works TEXT")
-        print("✅ Добавлен столбец selected_works")
-    except sqlite3.OperationalError:
-        pass
-        
-    try:
-        cursor.execute("ALTER TABLE orders ADD COLUMN is_full_course BOOLEAN DEFAULT 0")
-        print("✅ Добавлен столбец is_full_course")
-    except sqlite3.OperationalError:
-        pass
-        
-    try:
-        cursor.execute("ALTER TABLE orders ADD COLUMN actual_price REAL DEFAULT 0.0")
-        print("✅ Добавлен столбец actual_price")
-    except sqlite3.OperationalError:
-        pass
-        
-    # Миграции для полей исправлений
-    try:
-        cursor.execute("ALTER TABLE orders ADD COLUMN revision_comment TEXT")
-        print("✅ Добавлен столбец revision_comment")
-    except sqlite3.OperationalError:
-        pass
-        
-    try:
-        cursor.execute("ALTER TABLE orders ADD COLUMN revision_grade TEXT")
-        print("✅ Добавлен столбец revision_grade")
-    except sqlite3.OperationalError:
-        pass
-    
-    # Добавляем базовые предметы
-    cursor.execute("SELECT COUNT(*) FROM subjects")
-    if cursor.fetchone()[0] == 0:
-        subjects = [
-            ("Летняя практика", "Системный анализ предприятия, архитектурное моделирование, управление проектами", 2500.0),
-            ("Статистические методы", "Практические работы по статистическим методам", 2000.0),
-            ("ПУП", "Практики, ИКР, рефераты по проектированию программного обеспечения", 2200.0),
-            ("Цифровая экономика", "Практические и лабораторные работы по цифровой экономике", 1800.0),
-            ("Моделирование бизнес-процессов", "Практические работы по моделированию БП", 2000.0),
-            ("Другой предмет", "Индивидуальное задание по другому предмету", 1500.0),
-        ]
-        cursor.executemany(
-            "INSERT INTO subjects (name, description, price) VALUES (?, ?, ?)",
-            subjects
-        )
-    
-    conn.commit()
-    conn.close()
-
-def send_notification(endpoint: str, data: dict):
-    """Отправка уведомления боту"""
-    try:
-        url = f"{BOT_URL}/webhook/{endpoint}"
-        print(f"📤 Отправляем уведомление: {url}")
-        print(f"🔍 Данные для отправки: {data}")
-        response = requests.post(url, json=data, timeout=30)
-        print(f"✅ Уведомление отправлено, статус: {response.status_code}")
-        if response.status_code != 200:
-            print(f"⚠️ Ответ сервера: {response.text}")
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Ошибка отправки уведомления: {e}")
-        print(f"🔧 Проверьте что бот запущен на {BOT_URL}")
-        print(f"💡 Для проверки откройте: {BOT_URL}/webhook/test")
+        return True
     except Exception as e:
-        print(f"❌ Неожиданная ошибка: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Ошибка подключения к Supabase: {e}")
+        return False
 
-# Инициализация БД при запуске
+def send_notification(message: str):
+    """Отправка уведомления в Telegram"""
+    if not BOT_TOKEN or not BOT_CHAT_ID:
+        print("⚠️ Telegram бот не настроен")
+        print(f"📱 УВЕДОМЛЕНИЕ: {message}")
+        return
+    
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        payload = {
+            'chat_id': BOT_CHAT_ID,
+            'text': message,
+            'parse_mode': 'HTML'
+        }
+        response = requests.post(url, json=payload, timeout=10)
+        if response.status_code == 200:
+            print("✅ Уведомление отправлено в Telegram")
+        else:
+            print(f"❌ Ошибка Telegram API: {response.text}")
+    except Exception as e:
+        print(f"❌ Ошибка отправки в Telegram: {e}")
+        print(f"📱 УВЕДОМЛЕНИЕ: {message}")
+
+# Инициализация при запуске
 @app.on_event("startup")
 def startup_event():
-    init_database()
-    print("🚀 Backend запущен!")
-    print(f"📱 Уведомления: {BOT_URL}")
+    if init_database():
+        print("🚀 Backend запущен с Supabase!")
+    else:
+        print("⚠️ Backend запущен без подключения к БД!")
+    
+    if BOT_TOKEN and BOT_CHAT_ID:
+        print("📱 Telegram уведомления настроены")
+    else:
+        print("⚠️ Telegram уведомления не настроены")
 
 # API Routes
 @app.get("/")
@@ -261,12 +112,11 @@ def read_root():
 # Students endpoints
 @app.get("/api/students")
 def get_students():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM students ORDER BY created_at DESC")
-    students = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return students
+    try:
+        response = supabase.table('students').select('*').order('created_at', desc=True).execute()
+        return response.data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка получения студентов: {str(e)}")
 
 @app.post("/api/students")
 def create_student(request: Request):
@@ -275,136 +125,118 @@ def create_student(request: Request):
 # Subjects endpoints
 @app.get("/api/subjects")
 def get_subjects():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM subjects WHERE is_active = 1 ORDER BY name")
-    subjects = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return subjects
+    try:
+        response = supabase.table('subjects').select('*').eq('is_active', True).order('name').execute()
+        return response.data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка получения предметов: {str(e)}")
 
 # Orders endpoints
 @app.get("/api/orders")
 def get_orders(page: int = 1, limit: int = 10):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    offset = (page - 1) * limit
-    
-    # Получаем заказы с данными студентов и предметов
-    cursor.execute("""
-        SELECT 
-            o.*,
-            s.name as student_name,
-            s.group_name as student_group,
-            s.telegram as student_telegram,
-            sub.name as subject_name,
-            sub.description as subject_description,
-            sub.price as subject_price
-        FROM orders o
-        JOIN students s ON o.student_id = s.id
-        JOIN subjects sub ON o.subject_id = sub.id
-        ORDER BY o.created_at DESC
-        LIMIT ? OFFSET ?
-    """, (limit, offset))
-    
-    orders = []
-    for row in cursor.fetchall():
-        order = dict(row)
-        # Добавляем связанные объекты
-        order['student'] = {
-            'id': order['student_id'],
-            'name': order['student_name'],
-            'group': order['student_group'],
-            'telegram': order['student_telegram']
-        }
-        order['subject'] = {
-            'id': order['subject_id'],
-            'name': order['subject_name'],
-            'description': order['subject_description'],
-            'price': order['subject_price']
-        }
+    try:
+        offset = (page - 1) * limit
+        
+        # Получаем заказы с связанными данными
+        response = supabase.table('orders').select("""
+            *,
+            students!inner(id, name, group_name, telegram),
+            subjects!inner(id, name, description, price)
+        """).order('created_at', desc=True).range(offset, offset + limit - 1).execute()
+        
+        orders = []
+        for order in response.data:
+            # Парсим файлы
+            if order.get('files'):
+                try:
+                    order['files'] = json.loads(order['files']) if isinstance(order['files'], str) else order['files']
+                except:
+                    order['files'] = []
+            else:
+                order['files'] = []
+            
+            # Преобразуем связанные данные
+            order['student'] = {
+                'id': order['students']['id'],
+                'name': order['students']['name'],
+                'group': order['students']['group_name'],
+                'telegram': order['students']['telegram']
+            }
+            order['subject'] = {
+                'id': order['subjects']['id'],
+                'name': order['subjects']['name'],
+                'description': order['subjects']['description'],
+                'price': order['subjects']['price']
+            }
+            
+            # Удаляем вложенные объекты
+            del order['students']
+            del order['subjects']
+            
+            orders.append(order)
+        
+        # Получаем общее количество
+        total_response = supabase.table('orders').select('id', count='exact').execute()
+        total = total_response.count
+        
+        return {"orders": orders, "total": total}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка получения заказов: {str(e)}")
+
+@app.get("/api/orders/{order_id}")
+def get_order(order_id: int):
+    try:
+        response = supabase.table('orders').select("""
+            *,
+            students!inner(id, name, group_name, telegram),
+            subjects!inner(id, name, description, price)
+        """).eq('id', order_id).single().execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        
+        order = response.data
+        
         # Парсим файлы
-        if order['files']:
+        if order.get('files'):
             try:
-                order['files'] = json.loads(order['files'])
+                order['files'] = json.loads(order['files']) if isinstance(order['files'], str) else order['files']
             except:
                 order['files'] = []
         else:
             order['files'] = []
         
-        # Убираем дублированные поля
-        for key in ['student_name', 'student_group', 'student_telegram', 
-                   'subject_name', 'subject_description', 'subject_price']:
-            order.pop(key, None)
+        # Преобразуем связанные данные
+        order['student'] = {
+            'id': order['students']['id'],
+            'name': order['students']['name'],
+            'group': order['students']['group_name'],
+            'telegram': order['students']['telegram']
+        }
+        order['subject'] = {
+            'id': order['subjects']['id'],
+            'name': order['subjects']['name'],
+            'description': order['subjects']['description'],
+            'price': order['subjects']['price']
+        }
         
-        orders.append(order)
-    
-    # Получаем общее количество
-    cursor.execute("SELECT COUNT(*) FROM orders")
-    total = cursor.fetchone()[0]
-    
-    conn.close()
-    
-    return {"orders": orders, "total": total}
-
-@app.get("/api/orders/{order_id}")
-def get_order(order_id: int):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT 
-            o.*,
-            s.name as student_name,
-            s.group_name as student_group,
-            s.telegram as student_telegram,
-            sub.name as subject_name,
-            sub.description as subject_description,
-            sub.price as subject_price
-        FROM orders o
-        JOIN students s ON o.student_id = s.id
-        JOIN subjects sub ON o.subject_id = sub.id
-        WHERE o.id = ?
-    """, (order_id,))
-    
-    row = cursor.fetchone()
-    if not row:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Заказ не найден")
-    
-    order = dict(row)
-    order['student'] = {
-        'id': order['student_id'],
-        'name': order['student_name'],
-        'group': order['student_group'],
-        'telegram': order['student_telegram']
-    }
-    order['subject'] = {
-        'id': order['subject_id'],
-        'name': order['subject_name'],
-        'description': order['subject_description'],
-        'price': order['subject_price']
-    }
-    
-    if order['files']:
-        try:
-            order['files'] = json.loads(order['files'])
-        except:
-            order['files'] = []
-    else:
-        order['files'] = []
-    
-    conn.close()
-    return order
+        # Удаляем вложенные объекты
+        del order['students']
+        del order['subjects']
+        
+        return order
+        
+    except Exception as e:
+        if "No rows found" in str(e):
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        raise HTTPException(status_code=500, detail=f"Ошибка получения заказа: {str(e)}")
 
 @app.post("/api/orders")
 async def create_order(request: Request):
     data = await request.json()
     
     print("📥 Получены данные заказа:", json.dumps(data, indent=2, ensure_ascii=False))
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
     
     try:
         # Проверяем обязательные поля
@@ -419,211 +251,181 @@ async def create_order(request: Request):
         
         # Создаем или получаем студента
         student_data = data['student']
-        cursor.execute("SELECT id FROM students WHERE telegram = ?", (student_data['telegram'],))
-        student_row = cursor.fetchone()
         
-        if student_row:
-            student_id = student_row[0]
+        # Проверяем существует ли студент
+        existing_student = supabase.table('students').select('id').eq('telegram', student_data['telegram']).single().execute()
+        
+        if existing_student.data:
+            student_id = existing_student.data['id']
             print(f"👤 Найден существующий студент ID: {student_id}")
             # Обновляем данные студента
-            cursor.execute(
-                "UPDATE students SET name = ?, group_name = ? WHERE id = ?",
-                (student_data['name'], student_data['group'], student_id)
-            )
+            supabase.table('students').update({
+                'name': student_data['name'],
+                'group_name': student_data['group']
+            }).eq('id', student_id).execute()
         else:
-            cursor.execute(
-                "INSERT INTO students (name, group_name, telegram) VALUES (?, ?, ?)",
-                (student_data['name'], student_data['group'], student_data['telegram'])
-            )
-            student_id = cursor.lastrowid
+            # Создаем нового студента
+            new_student = supabase.table('students').insert({
+                'name': student_data['name'],
+                'group_name': student_data['group'],
+                'telegram': student_data['telegram']
+            }).execute()
+            student_id = new_student.data[0]['id']
             print(f"👤 Создан новый студент ID: {student_id}")
         
-        # Получаем subject_id и проверяем его существование
+        # Проверяем существование предмета
         subject_id = int(data['subject_id'])
-        cursor.execute("SELECT id, name FROM subjects WHERE id = ?", (subject_id,))
-        subject_row = cursor.fetchone()
+        subject = supabase.table('subjects').select('id, name').eq('id', subject_id).single().execute()
         
-        if not subject_row:
+        if not subject.data:
             raise HTTPException(status_code=400, detail=f"Предмет с ID {subject_id} не найден")
         
-        print(f"📚 Предмет: {subject_row[1]} (ID: {subject_id})")
+        print(f"📚 Предмет: {subject.data['name']} (ID: {subject_id})")
         
-        # Получаем рассчитанную стоимость из frontend
+        # Подготавливаем данные заказа
         actual_price = data.get('actual_price', 0.0)
-        selected_works_json = ""
+        selected_works_json = json.dumps(data.get('selected_works', [])) if data.get('selected_works') else None
         is_full_course = data.get('is_full_course', False)
-        
-        if data.get('selected_works'):
-            selected_works_json = json.dumps(data['selected_works'])
-            print(f"💰 Выбранные работы: {data['selected_works']}")
-        
-        if is_full_course:
-            print(f"💰 Заказ всего курса")
         
         print(f"💰 Стоимость заказа: {actual_price} ₽")
         
         # Создаем заказ
-        cursor.execute("""
-            INSERT INTO orders (student_id, subject_id, title, description, input_data, variant_info, deadline, selected_works, is_full_course, actual_price)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            student_id,
-            subject_id,
-            data['title'],
-            data.get('description', ''),
-            data.get('input_data', ''),
-            data.get('variant_info', ''),
-            data['deadline'],
-            selected_works_json,
-            is_full_course,
-            actual_price
-        ))
+        new_order = supabase.table('orders').insert({
+            'student_id': student_id,
+            'subject_id': subject_id,
+            'title': data['title'],
+            'description': data.get('description', ''),
+            'input_data': data.get('input_data', ''),
+            'variant_info': data.get('variant_info', ''),
+            'deadline': data['deadline'],
+            'selected_works': selected_works_json,
+            'is_full_course': is_full_course,
+            'actual_price': actual_price,
+            'status': 'new'
+        }).execute()
         
-        order_id = cursor.lastrowid
+        order_id = new_order.data[0]['id']
         print(f"📝 Создан заказ ID: {order_id}")
-        conn.commit()
         
-        # Возвращаем созданный заказ
-        cursor.execute("""
-            SELECT 
-                o.*,
-                s.name as student_name,
-                s.group_name as student_group,
-                s.telegram as student_telegram,
-                sub.name as subject_name,
-                sub.description as subject_description,
-                sub.price as subject_price
-            FROM orders o
-            JOIN students s ON o.student_id = s.id
-            JOIN subjects sub ON o.subject_id = sub.id
-            WHERE o.id = ?
-        """, (order_id,))
-        
-        row = cursor.fetchone()
-        order = dict(row)
-        order['student'] = {
-            'id': order['student_id'],
-            'name': order['student_name'],
-            'group': order['student_group'],
-            'telegram': order['student_telegram']
-        }
-        order['subject'] = {
-            'id': order['subject_id'],
-            'name': order['subject_name'],
-            'description': order['subject_description'],
-            'price': order['subject_price']
-        }
-        order['files'] = []
-        
-        conn.close()
+        # Получаем созданный заказ с связанными данными
+        created_order = get_order(order_id)
         
         # Отправляем уведомление о новом заказе
         try:
-            notification_data = {
-                'id': order['id'],
-                'student_name': order['student']['name'],
-                'student_group': order['student']['group'],
-                'student_telegram': order['student']['telegram'],
-                'subject_name': order['subject']['name'],
-                'title': order['title'],
-                'description': order['description'],
-                'input_data': order['input_data'],
-                'variant_info': order['variant_info'],
-                'deadline': order['deadline'],
-                'price': order['subject']['price']
-            }
-            send_notification('new_order', notification_data)
-        except:
-            pass  # Не критично если уведомление не отправилось
+            message = f"""
+🆕 Новый заказ #{order_id}
+
+👤 Студент: {created_order['student']['name']}
+👥 Группа: {created_order['student']['group']}
+📱 Telegram: {created_order['student']['telegram']}
+
+📚 Предмет: {created_order['subject']['name']}
+📝 Название: {created_order['title']}
+📄 Описание: {created_order['description'][:200]}{'...' if len(created_order['description']) > 200 else ''}
+
+⏰ Дедлайн: {created_order['deadline']}
+💰 Стоимость: {actual_price} ₽
+
+Создан: {datetime.now().strftime('%d.%m.%Y %H:%M')}
+            """.strip()
+            
+            if created_order.get('variant_info'):
+                message += f"\n\n🔢 Информация о варианте:\n{created_order['variant_info'][:300]}{'...' if len(created_order['variant_info']) > 300 else ''}"
+            
+            if created_order.get('input_data'):
+                message += f"\n\n📋 Дополнительные требования:\n{created_order['input_data'][:300]}{'...' if len(created_order['input_data']) > 300 else ''}"
+            
+            send_notification(message)
+        except Exception as e:
+            print(f"⚠️ Ошибка отправки уведомления: {e}")
         
-        return order
+        return created_order
         
     except Exception as e:
-        conn.rollback()
-        conn.close()
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Ошибка создания заказа: {e}")
+        if "No rows found" in str(e):
+            # Студент не найден, но это нормально
+            pass
+        else:
+            raise HTTPException(status_code=500, detail=str(e))
 
 @app.patch("/api/orders/{order_id}/status")
 async def update_order_status(order_id: int, request: Request):
     data = await request.json()
     status = data['status']
     
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute(
-        "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        (status, order_id)
-    )
-    
-    if cursor.rowcount == 0:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Заказ не найден")
-    
-    conn.commit()
-    conn.close()
-    
-    # Возвращаем обновленный заказ
-    return get_order(order_id)
+    try:
+        # Обновляем статус заказа
+        response = supabase.table('orders').update({
+            'status': status,
+            'updated_at': datetime.now().isoformat()
+        }).eq('id', order_id).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        
+        # Возвращаем обновленный заказ
+        return get_order(order_id)
+        
+    except Exception as e:
+        if "No rows found" in str(e):
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        raise HTTPException(status_code=500, detail=f"Ошибка обновления статуса: {str(e)}")
 
 @app.patch("/api/orders/{order_id}/paid")
 def mark_order_as_paid(order_id: int):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute(
-        "UPDATE orders SET is_paid = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        (order_id,)
-    )
-    
-    if cursor.rowcount == 0:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Заказ не найден")
-    
-    conn.commit()
-    conn.close()
-    
-    return get_order(order_id)
+    try:
+        # Обновляем статус оплаты
+        response = supabase.table('orders').update({
+            'is_paid': True,
+            'updated_at': datetime.now().isoformat()
+        }).eq('id', order_id).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        
+        return get_order(order_id)
+        
+    except Exception as e:
+        if "No rows found" in str(e):
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        raise HTTPException(status_code=500, detail=f"Ошибка обновления оплаты: {str(e)}")
 
 @app.post("/api/orders/{order_id}/files")
 async def upload_order_files(order_id: int, files: list[UploadFile] = File(...)):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT id, title, status FROM orders WHERE id = ?", (order_id,))
-    order_data = cursor.fetchone()
-    if not order_data:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Заказ не найден")
-    
-    # Создаем папку для файлов заказа
-    upload_dir = f"uploads/order_{order_id}"
-    os.makedirs(upload_dir, exist_ok=True)
-    
-    # Сохраняем загруженные файлы
-    saved_files = []
-    
-    if not files or len(files) == 0:
-        # Если файлы не загружены, создаем демонстрационные
-        files_data = [
-            ("completed_work.docx", "demo"),
-            ("report.pdf", "demo")
-        ]
+    try:
+        # Проверяем существование заказа
+        order_check = supabase.table('orders').select('id, title, status').eq('id', order_id).single().execute()
+        if not order_check.data:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
         
-        for filename, file_type in files_data:
-            file_path = os.path.join(upload_dir, filename)
+        # Создаем папку для файлов заказа
+        upload_dir = os.path.join(UPLOADS_DIR, f"order_{order_id}")
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Сохраняем загруженные файлы
+        saved_files = []
+        
+        if not files or len(files) == 0:
+            # Если файлы не загружены, создаем демонстрационные
+            files_data = [
+                ("completed_work.docx", "demo"),
+                ("report.pdf", "demo")
+            ]
             
-            if file_type == "demo" and filename.endswith('.docx'):
-                # Создаем демо DOCX файл
-                import zipfile
-                with zipfile.ZipFile(file_path, 'w') as docx:
-                    docx.writestr('[Content_Types].xml', '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            for filename, file_type in files_data:
+                file_path = os.path.join(upload_dir, filename)
+                
+                if file_type == "demo" and filename.endswith('.docx'):
+                    # Создаем демо DOCX файл
+                    with zipfile.ZipFile(file_path, 'w') as docx:
+                        docx.writestr('[Content_Types].xml', '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 <Default Extension="xml" ContentType="application/xml"/>
 <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
 </Types>''')
-                    docx.writestr('word/document.xml', f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                        docx.writestr('word/document.xml', f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
 <w:body>
 <w:p><w:r><w:t>Выполненная работа для заказа #{order_id}</w:t></w:r></w:p>
@@ -631,14 +433,14 @@ async def upload_order_files(order_id: int, files: list[UploadFile] = File(...))
 <w:p><w:r><w:t>Статус: Выполнено</w:t></w:r></w:p>
 </w:body>
 </w:document>''')
-                    docx.writestr('_rels/.rels', '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                        docx.writestr('_rels/.rels', '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>''')
-                    
-            elif file_type == "demo" and filename.endswith('.pdf'):
-                # Создаем демо PDF файл
-                content = f"""%PDF-1.4
+                        
+                elif file_type == "demo" and filename.endswith('.pdf'):
+                    # Создаем демо PDF файл
+                    content = f"""%PDF-1.4
 1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
 3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj
@@ -656,193 +458,182 @@ xref 0 6
 trailer<</Size 6/Root 1 0 R>>
 startxref 467
 %%EOF"""
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(content)
-            
-            saved_files.append(filename)
-            
-    else:
-        # Сохраняем реальные загруженные файлы
-        for file in files:
-            if file.filename:
-                file_path = os.path.join(upload_dir, file.filename)
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(content)
                 
-                # Сохраняем файл на диск
-                with open(file_path, "wb") as buffer:
-                    shutil.copyfileobj(file.file, buffer)
+                saved_files.append(filename)
                 
-                saved_files.append(file.filename)
-                print(f"💾 Сохранен файл: {file.filename} для заказа {order_id}")
-    
-    # Обновляем информацию о файлах в базе данных
-    cursor.execute(
-        "UPDATE orders SET files = ?, status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        (json.dumps(saved_files), order_id)
-    )
-    
-    conn.commit()
-    conn.close()
-    
-    print(f"📎 Файлы добавлены к заказу {order_id}: {saved_files}")
-    
-    return get_order(order_id)
+        else:
+            # Сохраняем реальные загруженные файлы
+            for file in files:
+                if file.filename:
+                    file_path = os.path.join(upload_dir, file.filename)
+                    
+                    # Сохраняем файл на диск
+                    with open(file_path, "wb") as buffer:
+                        shutil.copyfileobj(file.file, buffer)
+                    
+                    saved_files.append(file.filename)
+                    print(f"💾 Сохранен файл: {file.filename} для заказа {order_id}")
+        
+        # Обновляем информацию о файлах в базе данных
+        supabase.table('orders').update({
+            'files': json.dumps(saved_files),
+            'status': 'completed',
+            'updated_at': datetime.now().isoformat()
+        }).eq('id', order_id).execute()
+        
+        print(f"📎 Файлы добавлены к заказу {order_id}: {saved_files}")
+        
+        return get_order(order_id)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки файлов: {str(e)}")
 
 @app.get("/api/orders/{order_id}/download/{filename}")
 async def download_file(order_id: int, filename: str):
     """Скачивание файла по заказу"""
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Проверяем существование заказа и файлов
-    cursor.execute("SELECT files FROM orders WHERE id = ?", (order_id,))
-    result = cursor.fetchone()
-    conn.close()
-    
-    if not result:
-        raise HTTPException(status_code=404, detail="Заказ не найден")
-    
-    files_json = result[0]
-    if not files_json:
-        raise HTTPException(status_code=404, detail="Файлы не найдены")
-    
     try:
-        files = json.loads(files_json)
-    except:
-        files = []
-    
-    if filename not in files:
-        raise HTTPException(status_code=404, detail="Файл не найден")
-    
-    # В реальной системе файлы лежали бы в папке uploads/order_{order_id}/
-    # Здесь создаем заглушку - временный файл для демонстрации
-    file_path = f"uploads/order_{order_id}/{filename}"
-    
-    # Создаем папку если не существует
-    os.makedirs(f"uploads/order_{order_id}", exist_ok=True)
-    
-    # Проверяем что файл существует
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail=f"Файл {filename} не найден на сервере")
-    
-    # Определяем правильный media-type
-    if filename.endswith('.docx'):
-        media_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    elif filename.endswith('.pdf'):
-        media_type = 'application/pdf'
-    elif filename.endswith('.txt'):
-        media_type = 'text/plain; charset=utf-8'
-    else:
-        media_type = 'application/octet-stream'
-    
-    return FileResponse(
-        path=file_path,
-        filename=filename,
-        media_type=media_type
-    )
+        # Проверяем существование заказа и файлов
+        order = supabase.table('orders').select('files').eq('id', order_id).single().execute()
+        
+        if not order.data:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        
+        files_json = order.data.get('files')
+        if not files_json:
+            raise HTTPException(status_code=404, detail="Файлы не найдены")
+        
+        try:
+            files = json.loads(files_json) if isinstance(files_json, str) else files_json
+        except:
+            files = []
+        
+        if filename not in files:
+            raise HTTPException(status_code=404, detail="Файл не найден")
+        
+        # Путь к файлу
+        file_path = os.path.join(UPLOADS_DIR, f"order_{order_id}", filename)
+        
+        # Проверяем что файл существует
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail=f"Файл {filename} не найден на сервере")
+        
+        # Определяем правильный media-type
+        if filename.endswith('.docx'):
+            media_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        elif filename.endswith('.pdf'):
+            media_type = 'application/pdf'
+        elif filename.endswith('.txt'):
+            media_type = 'text/plain; charset=utf-8'
+        else:
+            media_type = 'application/octet-stream'
+        
+        return FileResponse(
+            path=file_path,
+            filename=filename,
+            media_type=media_type
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка скачивания файла: {str(e)}")
 
 @app.get("/api/orders/{order_id}/download-all")
 async def download_all_files(order_id: int):
     """Скачивание всех файлов заказа в zip архиве"""
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Проверяем существование заказа и файлов
-    cursor.execute("SELECT files, title FROM orders WHERE id = ?", (order_id,))
-    result = cursor.fetchone()
-    conn.close()
-    
-    if not result:
-        raise HTTPException(status_code=404, detail="Заказ не найден")
-    
-    files_json, order_title = result
-    if not files_json:
-        raise HTTPException(status_code=404, detail="Файлы не найдены")
-    
     try:
-        files = json.loads(files_json)
-    except:
-        files = []
-    
-    if not files:
-        raise HTTPException(status_code=404, detail="Нет файлов для скачивания")
-    
-    # Создаем временный zip файл
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_zip:
-        with zipfile.ZipFile(temp_zip.name, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            for filename in files:
-                file_path = f"uploads/order_{order_id}/{filename}"
-                if os.path.exists(file_path):
-                    zip_file.write(file_path, filename)
-                    print(f"📦 Добавлен в архив: {filename}")
-                else:
-                    print(f"⚠️ Файл не найден: {filename}")
+        # Проверяем существование заказа и файлов
+        order = supabase.table('orders').select('files, title').eq('id', order_id).single().execute()
         
-        # Генерируем имя для zip файла
-        safe_title = "".join(c for c in order_title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-        zip_filename = f"Заказ_{order_id}_{safe_title[:30]}.zip"
+        if not order.data:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
         
-        return FileResponse(
-            path=temp_zip.name,
-            filename=zip_filename,
-            media_type='application/zip',
-            background=lambda: os.unlink(temp_zip.name)  # Удаляем временный файл после отправки
-        )
+        files_json = order.data.get('files')
+        order_title = order.data.get('title', 'Заказ')
+        
+        if not files_json:
+            raise HTTPException(status_code=404, detail="Файлы не найдены")
+        
+        try:
+            files = json.loads(files_json) if isinstance(files_json, str) else files_json
+        except:
+            files = []
+        
+        if not files:
+            raise HTTPException(status_code=404, detail="Нет файлов для скачивания")
+        
+        # Создаем временный zip файл
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_zip:
+            with zipfile.ZipFile(temp_zip.name, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for filename in files:
+                    file_path = os.path.join(UPLOADS_DIR, f"order_{order_id}", filename)
+                    if os.path.exists(file_path):
+                        zip_file.write(file_path, filename)
+                        print(f"📦 Добавлен в архив: {filename}")
+                    else:
+                        print(f"⚠️ Файл не найден: {filename}")
+            
+            # Генерируем имя для zip файла
+            safe_title = "".join(c for c in order_title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            zip_filename = f"Заказ_{order_id}_{safe_title[:30]}.zip"
+            
+            return FileResponse(
+                path=temp_zip.name,
+                filename=zip_filename,
+                media_type='application/zip',
+                background=lambda: os.unlink(temp_zip.name)  # Удаляем временный файл после отправки
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка архивирования файлов: {str(e)}")
 
 @app.post("/api/orders/{order_id}/payment-notification")
 async def notify_payment(order_id: int):
     """Уведомление администратора об оплате заказа студентом"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Получаем информацию о заказе
-    cursor.execute("""
-        SELECT 
-            o.id, o.title, o.status, o.description, o.input_data, o.variant_info, o.deadline,
-            s.name as student_name,
-            s.group_name as student_group,
-            s.telegram as student_telegram,
-            sub.name as subject_name,
-            sub.price as subject_price
-        FROM orders o
-        JOIN students s ON o.student_id = s.id
-        JOIN subjects sub ON o.subject_id = sub.id
-        WHERE o.id = ?
-    """, (order_id,))
-    
-    order_data = cursor.fetchone()
-    if not order_data:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Заказ не найден")
-    
-    order = dict(order_data)
-    conn.close()
-    
-    # Отправляем уведомление в Telegram
     try:
-        notification_data = {
-            'order_id': order['id'],
-            'student_name': order['student_name'],
-            'student_group': order['student_group'],
-            'student_telegram': order['student_telegram'],
-            'subject_name': order['subject_name'],
-            'title': order['title'],
-            'description': order['description'],
-            'input_data': order['input_data'],
-            'variant_info': order['variant_info'],
-            'deadline': order['deadline'],
-            'price': order['subject_price']
-        }
-        print(f"🔍 Данные для уведомления: {notification_data}")
-        send_notification('payment_notification', notification_data)
+        # Получаем информацию о заказе
+        order = get_order(order_id)
+        
+        # Отправляем уведомление в Telegram
+        message = f"""
+💰 Студент отметил оплату!
+
+📝 Заказ #{order['id']}: {order['title']}
+👤 Студент: {order['student']['name']}
+👥 Группа: {order['student']['group']}
+📱 Telegram: {order['student']['telegram']}
+
+📚 Предмет: {order['subject']['name']}
+📄 Описание: {order['description'][:200]}{'...' if len(order['description']) > 200 else ''}
+⏰ Дедлайн: {order['deadline']}
+💰 Сумма: {order.get('actual_price', order['subject']['price'])} ₽
+        """.strip()
+        
+        if order.get('variant_info'):
+            message += f"\n\n🔢 Информация о варианте:\n{order['variant_info'][:300]}{'...' if len(order['variant_info']) > 300 else ''}"
+        
+        if order.get('input_data'):
+            message += f"\n\n📋 Дополнительные требования:\n{order['input_data'][:300]}{'...' if len(order['input_data']) > 300 else ''}"
+        
+        message += f"\n\n⚠️ Проверьте поступление средств и обновите статус заказа!"
+        message += f"\n\nУведомление: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+        
+        send_notification(message)
         print(f"💰 Отправлено уведомление об оплате заказа #{order_id}")
+        
+        return {"status": "notification_sent", "order_id": order_id}
+        
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ Ошибка отправки уведомления об оплате: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    return {"status": "notification_sent", "order_id": order_id}
+        raise HTTPException(status_code=500, detail=f"Ошибка отправки уведомления: {str(e)}")
 
 @app.post("/api/orders/{order_id}/request-revision")
 async def request_order_revision(order_id: int, request: Request):
@@ -851,89 +642,66 @@ async def request_order_revision(order_id: int, request: Request):
     comment = data.get('comment', '')
     grade = data.get('grade')
     
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Получаем информацию о заказе
-    cursor.execute("""
-        SELECT 
-            o.id, o.title, o.status, o.description, o.input_data, o.variant_info, o.deadline,
-            s.name as student_name,
-            s.group_name as student_group,
-            s.telegram as student_telegram,
-            sub.name as subject_name,
-            sub.price as subject_price
-        FROM orders o
-        JOIN students s ON o.student_id = s.id
-        JOIN subjects sub ON o.subject_id = sub.id
-        WHERE o.id = ?
-    """, (order_id,))
-    
-    order_data = cursor.fetchone()
-    if not order_data:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Заказ не найден")
-    
-    order = dict(order_data)
-    
-    # Обновляем заказ на статус "требуют исправления"
-    cursor.execute("""
-        UPDATE orders 
-        SET status = 'needs_revision', 
-            revision_comment = ?, 
-            revision_grade = ?, 
-            updated_at = CURRENT_TIMESTAMP 
-        WHERE id = ?
-    """, (comment, grade, order_id))
-    
-    if cursor.rowcount == 0:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Заказ не найден")
-    
-    conn.commit()
-    conn.close()
-    
-    # Отправляем уведомление админу о необходимости исправлений
     try:
-        notification_data = {
-            'order_id': order_id,
-            'order_title': order['title'],
-            'student_name': order['student_name'],
-            'student_group': order['student_group'],
-            'student_telegram': order['student_telegram'],
-            'subject_name': order['subject_name'],
-            'comment': comment,
-            'grade': grade,
-            'deadline': order['deadline']
-        }
-        send_notification('revision_request', notification_data)
+        # Обновляем заказ на статус "требуют исправления"
+        response = supabase.table('orders').update({
+            'status': 'needs_revision',
+            'revision_comment': comment,
+            'revision_grade': grade,
+            'updated_at': datetime.now().isoformat()
+        }).eq('id', order_id).execute()
+        
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        
+        # Получаем информацию о заказе для уведомления
+        order = get_order(order_id)
+        
+        # Отправляем уведомление админу о необходимости исправлений
+        message = f"""
+🔄 Запрошены исправления для заказа #{order_id}
+
+📝 Заказ: {order['title']}
+👤 Студент: {order['student']['name']}
+👥 Группа: {order['student']['group']}
+📱 Telegram: {order['student']['telegram']}
+📚 Предмет: {order['subject']['name']}
+⏰ Дедлайн: {order['deadline']}
+
+💬 Комментарий к исправлениям:
+{comment[:500]}{'...' if len(comment) > 500 else ''}
+        """.strip()
+        
+        if grade:
+            message += f"\n\n⭐ Оценка из Moodle: {grade}"
+        
+        message += f"\n\nЗапрос отправлен: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+        
+        send_notification(message)
         print(f"🔄 Отправлено уведомление о запросе исправлений для заказа #{order_id}")
+        
+        # Возвращаем обновленный заказ
+        return get_order(order_id)
+        
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ Ошибка отправки уведомления о исправлениях: {e}")
-    
-    # Возвращаем обновленный заказ
-    return get_order(order_id)
+        raise HTTPException(status_code=500, detail=f"Ошибка запроса исправлений: {str(e)}")
 
-@app.post("/api/test-bot-connection")
-async def test_bot_connection():
-    """Тестовая отправка уведомления для проверки соединения с ботом"""
-    test_data = {
-        'order_id': 999,
-        'student_name': 'Тест Тестов',
-        'student_group': 'ТЕСТ-00',
-        'student_telegram': '@test_user',
-        'subject_name': 'Тестовый предмет',
-        'title': 'Тестовая работа',
-        'description': 'Описание тестовой работы',
-        'input_data': 'Тестовые требования',
-        'variant_info': 'Тестовый вариант',
-        'deadline': '2024-12-31',
-        'price': 1000
-    }
-    
-    print("🧪 Тестируем соединение с ботом...")
+@app.post("/api/test-notification")
+async def test_notification():
+    """Тестовая отправка уведомления"""
     try:
-        send_notification('payment_notification', test_data)
+        message = f"""
+🧪 Тестовое уведомление
+
+📅 Время: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}
+🚀 Backend работает корректно
+📱 Telegram уведомления настроены
+        """.strip()
+        
+        send_notification(message)
         return {"status": "success", "message": "Тестовое уведомление отправлено"}
     except Exception as e:
         print(f"❌ Тест не прошел: {e}")
