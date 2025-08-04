@@ -251,7 +251,14 @@ const CreateOrderPage: React.FC = () => {
       };
 
       await createOrder(orderData);
-      navigate('/');
+      
+      // Сохраняем telegram в localStorage и перенаправляем
+      const cleanTelegram = formData.studentTelegram.startsWith('@') 
+        ? formData.studentTelegram.substring(1) 
+        : formData.studentTelegram;
+      localStorage.setItem('telegramUser', cleanTelegram);
+      
+      navigate(`/orders`);
     } catch (error: any) {
       console.error('Ошибка создания заказа:', error);
       setError(error.response?.data?.detail || 'Не удалось создать заказ');

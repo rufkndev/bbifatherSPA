@@ -17,8 +17,12 @@ export const getSubjects = async (): Promise<Subject[]> => {
 };
 
 // Orders API
-export const getOrders = async (page: number = 1, limit: number = 10): Promise<OrderListResponse> => {
-  const response = await api.get(`/api/orders?page=${page}&limit=${limit}`);
+export const getOrders = async (page: number = 1, limit: number = 10, telegram?: string | null): Promise<OrderListResponse> => {
+  let url = `/api/orders?page=${page}&limit=${limit}`;
+  if (telegram) {
+    url += `&telegram=${telegram}`;
+  }
+  const response = await api.get(url);
   return response.data;
 };
 

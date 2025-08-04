@@ -146,16 +146,26 @@ def get_subjects():
 
 # Orders endpoints
 @app.get("/api/orders")
-def get_orders(page: int = 1, limit: int = 10):
+def get_orders(page: int = 1, limit: int = 10, telegram: str = None):
     try:
         offset = (page - 1) * limit
         
-        # Получаем заказы с связанными данными
-        response = supabase.table('orders').select("""
+        query = supabase.table('orders').select("""
             *,
             students!inner(id, name, group_name, telegram),
             subjects!inner(id, name, description, price)
-        """).order('created_at', desc=True).range(offset, offset + limit - 1).execute()
+        """)
+
+        count_query = supabase.table('orders').select('id', count='exact')
+
+        if telegram:
+            # Убедимся, что никнейм чистый (без @)
+            clean_telegram = telegram.lstrip('@')
+            query = query.eq('students.telegram', clean_telegram)
+            count_query = count_query.eq('students.telegram', clean_telegram)
+
+        # Получаем заказы с пагинацией
+        response = query.order('created_at', desc=True).range(offset, offset + limit - 1).execute()
         
         orders = []
         for order in response.data:
@@ -189,7 +199,7 @@ def get_orders(page: int = 1, limit: int = 10):
             orders.append(order)
         
         # Получаем общее количество
-        total_response = supabase.table('orders').select('id', count='exact').execute()
+        total_response = count_query.execute()
         total = total_response.count
         
         return {"orders": orders, "total": total}
