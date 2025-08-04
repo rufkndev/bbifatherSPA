@@ -139,6 +139,18 @@ const OrdersPage: React.FC = () => {
     setOrders([]);
   };
 
+  const handleAdminLogin = () => {
+    const password = prompt('Введите пароль администратора:');
+    if (password === 'admin123') {
+      const adminUser = 'admin_view';
+      localStorage.setItem('telegramUser', adminUser);
+      setTelegramUser(adminUser);
+      setIsAdminView(true);
+    } else if (password !== null) {
+      alert('Неверный пароль!');
+    }
+  };
+
   const handleDownloadFile = async (orderId: number, filename: string) => {
     const downloadKey = `${orderId}-${filename}`;
     
@@ -278,7 +290,7 @@ const OrdersPage: React.FC = () => {
             <Button 
               fullWidth 
               variant="text" 
-              onClick={() => { setTelegramUser('admin_view'); setIsAdminView(true); }}
+              onClick={handleAdminLogin}
               sx={{ mt: 2, color: 'text.secondary' }}
             >
               Войти как администратор
