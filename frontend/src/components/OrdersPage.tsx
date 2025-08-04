@@ -108,22 +108,25 @@ const OrdersPage: React.FC = () => {
     // Приоритет: параметр в URL -> localStorage
     const urlTelegram = searchParams.get('telegram');
     if (urlTelegram) {
-      localStorage.setItem('telegramUser', urlTelegram);
-      setTelegramUser(urlTelegram);
+      const cleanUrlTelegram = urlTelegram.startsWith('@') ? urlTelegram.substring(1) : urlTelegram;
+      localStorage.setItem('telegramUser', cleanUrlTelegram);
+      setTelegramUser(cleanUrlTelegram);
       // Очищаем URL от параметра
       setSearchParams({}, { replace: true });
+      return; // Выходим, чтобы избежать двойной загрузки
     }
-    
-    // Если пользователь определен, загружаем его заказы
-    if (telegramUser) {
-      setIsAdminView(false);
-      loadOrders(telegramUser);
+
+    const storedUser = localStorage.getItem('telegramUser');
+    if (storedUser) {
+      setTelegramUser(storedUser);
+      const isAdmin = storedUser === 'admin_view';
+      setIsAdminView(isAdmin);
+      loadOrders(isAdmin ? null : storedUser);
     } else {
-      // Иначе - вид администратора
-      setIsAdminView(true);
-      loadOrders(null);
+        // Если нет сохраненного пользователя, остаемся на странице логина
+        setLoading(false);
     }
-  }, [telegramUser, loadOrders, searchParams, setSearchParams]);
+  }, [loadOrders, searchParams, setSearchParams]);
 
   const handleLogin = () => {
     if (telegramInput) {

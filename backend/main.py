@@ -274,9 +274,11 @@ async def create_order(request: Request):
         
         # Создаем или получаем студента
         student_data = data['student']
+        # Убираем @ из ника
+        clean_telegram = student_data['telegram'].lstrip('@')
         
         # Проверяем существует ли студент
-        existing_student = supabase.table('students').select('id').eq('telegram', student_data['telegram']).limit(1).execute()
+        existing_student = supabase.table('students').select('id').eq('telegram', clean_telegram).limit(1).execute()
         
         if existing_student.data and len(existing_student.data) > 0:
             student_id = existing_student.data[0]['id']
@@ -291,7 +293,7 @@ async def create_order(request: Request):
             new_student = supabase.table('students').insert({
                 'name': student_data['name'],
                 'group_name': student_data['group'],
-                'telegram': student_data['telegram']
+                'telegram': clean_telegram
             }).execute()
             student_id = new_student.data[0]['id']
             print(f"👤 Создан новый студент ID: {student_id}")
