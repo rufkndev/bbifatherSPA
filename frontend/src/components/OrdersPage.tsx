@@ -193,7 +193,7 @@ const OrdersPage: React.FC = () => {
   };
 
   const handleSubmitRevision = async () => {
-    if (!selectedOrderForRevision || !revisionComment.trim()) return;
+    if (!selectedOrderForRevision?.id || !revisionComment.trim()) return;
 
     try {
       setSubmittingRevision(true);
