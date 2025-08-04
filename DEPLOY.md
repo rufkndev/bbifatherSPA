@@ -122,7 +122,7 @@ sudo certbot --nginx -d bbifather.ru -d www.bbifather.ru
 
 ## Готово!
 
-Сайт доступен по адресу: http://bbifather.ru
+Сайт доступен по адресу: http://bbifather.ru 
 
 ## Полезные команды
 
