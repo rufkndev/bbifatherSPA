@@ -308,13 +308,68 @@ const OrdersPage: React.FC = () => {
                       )}
                     </Stack>
                   </CardContent>
-                  <CardActions sx={{ p: 2, justifyContent: 'space-between' }}>
-                     <Box display="flex" gap={1}>
-                       {order.files && order.files.length > 0 &&
-                         <Button size="small" variant="contained" onClick={() => handleDownloadAllFiles(order.id!)}>Скачать</Button>
-                       }
+                  <CardActions sx={{ p: 2, flexDirection: 'column', alignItems: 'stretch', gap: 2 }}>
+                     {/* Блок для статуса "ожидание оплаты" */}
+                     {order.status === 'waiting_payment' && !isAdminView && (
+                       <Box sx={{ p: 2, bgcolor: '#fff3cd', borderRadius: 2, border: '1px solid #ffeaa7' }}>
+                         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#856404' }}>
+                           💳 Реквизиты для оплаты
+                         </Typography>
+                         <Typography variant="body2" sx={{ mb: 1 }}>
+                           <strong>Номер карты:</strong> 2202 2023 4567 8901
+                         </Typography>
+                         <Typography variant="body2" sx={{ mb: 1 }}>
+                           <strong>Получатель:</strong> Иван Иванович И.
+                         </Typography>
+                         <Typography variant="body2" sx={{ mb: 2 }}>
+                           <strong>Сумма:</strong> {order.actual_price || order.subject?.price} ₽
+                         </Typography>
+                         
+                         {!paymentNotifications.has(order.id!) && (
+                           <Button
+                             size="small"
+                             variant="contained"
+                             color="success"
+                             onClick={() => handlePaymentNotification(order.id!)}
+                             sx={{ fontWeight: 600 }}
+                           >
+                             ✅ Я оплатил
+                           </Button>
+                         )}
+                         {paymentNotifications.has(order.id!) && (
+                           <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>
+                             ✅ Уведомление об оплате отправлено
+                           </Typography>
+                         )}
+                       </Box>
+                     )}
+
+                     {/* Блок для статуса "выполнено" */}
+                     {order.status === 'completed' && !isAdminView && (
+                       <Box sx={{ p: 2, bgcolor: '#d4edda', borderRadius: 2, border: '1px solid #c3e6cb' }}>
+                         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#155724' }}>
+                           ✅ Работа выполнена
+                         </Typography>
+                         <Button
+                           size="small"
+                           variant="outlined"
+                           color="warning"
+                           onClick={() => handleRequestRevision(order)}
+                           sx={{ fontWeight: 600 }}
+                         >
+                           🔄 Нужны исправления
+                         </Button>
+                       </Box>
+                     )}
+
+                     <Box display="flex" justifyContent="space-between" alignItems="center">
+                       <Box display="flex" gap={1}>
+                         {order.files && order.files.length > 0 &&
+                           <Button size="small" variant="contained" onClick={() => handleDownloadAllFiles(order.id!)}>Скачать</Button>
+                         }
+                       </Box>
+                       <Typography variant="h6" color="primary" sx={{ fontWeight: 600 }}>#{order.id}</Typography>
                      </Box>
-                     <Typography variant="h6" color="primary" sx={{ fontWeight: 600 }}>#{order.id}</Typography>
                   </CardActions>
                 </Card>
               </Grid>
@@ -322,6 +377,70 @@ const OrdersPage: React.FC = () => {
           })}
         </Grid>
       )}
+      
+      {/* Диалог запроса исправлений */}
+      <Dialog 
+        open={revisionDialogOpen} 
+        onClose={handleCloseRevisionDialog}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+            maxHeight: '90vh',
+            overflow: 'auto',
+          }
+        }}
+      >
+        <DialogTitle sx={{ pb: 2 }}>
+          🔄 Запрос исправлений для заказа #{selectedOrderForRevision?.id}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            <strong>Заказ:</strong> {selectedOrderForRevision?.title}
+          </Typography>
+          
+          <TextField
+            autoFocus
+            multiline
+            rows={4}
+            margin="dense"
+            label="Комментарий к исправлениям *"
+            fullWidth
+            variant="outlined"
+            value={revisionComment}
+            onChange={(e) => setRevisionComment(e.target.value)}
+            placeholder="Опишите, что нужно исправить..."
+            sx={{ mb: 2 }}
+            helperText="Укажите конкретные моменты, которые требуют доработки"
+          />
+          
+          <TextField
+            margin="dense"
+            label="Оценка из Moodle (опционально)"
+            fullWidth
+            variant="outlined"
+            value={revisionGrade}
+            onChange={(e) => setRevisionGrade(e.target.value)}
+            placeholder="Например: 3 из 5 или незачет"
+            helperText="Если есть оценка преподавателя, укажите её"
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={handleCloseRevisionDialog} variant="outlined">
+            Отмена
+          </Button>
+          <Button 
+            onClick={handleSubmitRevision} 
+            variant="contained"
+            color="warning"
+            disabled={!revisionComment.trim() || submittingRevision}
+            sx={{ fontWeight: 600 }}
+          >
+            {submittingRevision ? 'Отправка...' : '🔄 Отправить запрос'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

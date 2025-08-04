@@ -211,7 +211,7 @@ usermod -aG sudo bbifather
 su - bbifather
 
 # Клонируем проект
-git clone https://github.com/yourusername/bbifatherSPA.git
+git clone https://github.com/rufkndev/bbifatherSPA.git
 cd bbifatherSPA
 
 # Переходим в backend
@@ -242,12 +242,12 @@ nano .env
 
 ```env
 # Supabase настройки
-SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_KEY=your-supabase-anon-key
+SUPABASE_URL=https://yvtobwpaxdgvvobhaymq.supabase.co
+SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2dG9id3BheGRndnZvYmhheW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzMDg5MTksImV4cCI6MjA2OTg4NDkxOX0.yrfE7RBIoMfrhRWD2ptU9pyerTvxwXHW_y6V3FzNi80
 
 # Telegram Bot настройки (опционально)
-TELEGRAM_BOT_TOKEN=your-bot-token
-TELEGRAM_CHAT_ID=your-chat-id
+TELEGRAM_BOT_TOKEN=7582178055:AAFcTdIt3g1LiJ-6-W0QDR1p1MPm9LkSFCY
+TELEGRAM_CHAT_ID=814032949
 
 # Frontend URLs для CORS
 FRONTEND_URLS=https://bbifather.ru,https://www.bbifather.ru
@@ -326,7 +326,7 @@ const API_BASE_URL = 'https://bbifather.ru/api';
 npm install
 npm run build
 ```
-
+dMa87H_?+yU2bP
 ### 4. Перемещение build в nginx директорию
 
 ```bash
@@ -375,7 +375,7 @@ server {
     gzip on;
     gzip_vary on;
     gzip_min_length 1024;
-    gzip_proxied expired no-cache no-store private must-revalidate no_last_modified no_etag auth;
+    gzip_proxied expired no-cache no-store private no_last_modified no_etag auth;
     gzip_types
         text/plain
         text/css
