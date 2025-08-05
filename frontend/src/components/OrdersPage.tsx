@@ -316,10 +316,10 @@ const OrdersPage: React.FC = () => {
                            💳 Реквизиты для оплаты
                          </Typography>
                          <Typography variant="body2" sx={{ mb: 1 }}>
-                           <strong>Номер карты:</strong> 2202 2023 4567 8901
+                           <strong>Карта Тбанк:</strong> +7 962 120 63 60
                          </Typography>
                          <Typography variant="body2" sx={{ mb: 1 }}>
-                           <strong>Получатель:</strong> Иван Иванович И.
+                           <strong>Получатель:</strong> Таранов А. И.
                          </Typography>
                          <Typography variant="body2" sx={{ mb: 2 }}>
                            <strong>Сумма:</strong> {order.actual_price || order.subject?.price} ₽
