@@ -677,4 +677,5 @@ htop
 df -h
 ```
 
-Для получения помощи обращайтесь к документации или создавайте issue в репозитории проекта.
+python backend/main.py & python bot.py & wait
+pkill -f "python bot.py" && pkill -f "python backend/main.py"
