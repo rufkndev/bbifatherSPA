@@ -130,7 +130,7 @@ class BBIFatherBot:
                 )
             ],
             [
-                InlineKeyboardButton("💬 Техподдержка", callback_data="/support"),
+                InlineKeyboardButton("💬 Техподдержка", callback_data="support"),
                 InlineKeyboardButton("📋 Правила", callback_data="rules")
             ],
             [
@@ -213,6 +213,10 @@ class BBIFatherBot:
                 
                 keyboard = self.get_main_keyboard(user.username)
                 await query.edit_message_text(welcome_text, reply_markup=keyboard, parse_mode='HTML')
+            elif query.data.startswith("download_"):
+                logger.info(f"📥 Обрабатываем скачивание заказа")
+                order_id = int(query.data.split("_")[1])
+                await self.send_order_files(update, context, order_id)
             else:
                 logger.warning(f"❓ Неизвестная кнопка: {query.data}")
                 await query.edit_message_text("❓ Неизвестная команда")
