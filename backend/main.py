@@ -93,7 +93,7 @@ def init_database():
         return False
 
 def send_notification(message: str):
-    """Отправка уведомления в Telegram"""
+    """Отправка уведомления администратору в Telegram"""
     if not BOT_TOKEN or not BOT_CHAT_ID:
         print("⚠️ Telegram бот не настроен")
         print(f"📱 УВЕДОМЛЕНИЕ: {message}")
@@ -108,12 +108,126 @@ def send_notification(message: str):
         }
         response = requests.post(url, json=payload, timeout=10)
         if response.status_code == 200:
-            print("✅ Уведомление отправлено в Telegram")
+            print("✅ Уведомление отправлено администратору")
         else:
             print(f"❌ Ошибка Telegram API: {response.text}")
     except Exception as e:
         print(f"❌ Ошибка отправки в Telegram: {e}")
         print(f"📱 УВЕДОМЛЕНИЕ: {message}")
+
+async def send_status_notification_to_user(order: dict, new_status: str):
+    """Отправка уведомления пользователю об изменении статуса заказа"""
+    if not BOT_TOKEN:
+        print("⚠️ BOT_TOKEN не настроен для уведомлений пользователей")
+        return
+        
+    user_telegram = order['student'].get('telegram')
+    if not user_telegram:
+        print("⚠️ У пользователя не указан telegram")
+        return
+    
+    # Сообщения для разных статусов
+    status_messages = {
+        'new': {
+            'emoji': '🆕',
+            'title': 'Новый заказ создан',
+            'message': 'Ваш заказ принят в систему. Ожидается оплата.'
+        },
+        'pending_payment': {
+            'emoji': '💳', 
+            'title': 'Ожидается оплата',
+            'message': 'Пожалуйста, произведите оплату согласно указанным реквизитам.'
+        },
+        'paid': {
+            'emoji': '✅',
+            'title': 'Оплата подтверждена', 
+            'message': 'Спасибо за оплату! Ваш заказ принят в работу.'
+        },
+        'in_progress': {
+            'emoji': '⚙️',
+            'title': 'Работа началась',
+            'message': 'Мы приступили к выполнению вашего заказа!'
+        },
+        'completed': {
+            'emoji': '🎉',
+            'title': 'Работа выполнена',
+            'message': 'Ваш заказ готов! Файлы доступны для скачивания.'
+        },
+        'needs_revision': {
+            'emoji': '🔄',
+            'title': 'Требуются исправления',
+            'message': 'Необходимы небольшие правки. Проверьте комментарии.'
+        },
+        'cancelled': {
+            'emoji': '❌',
+            'title': 'Заказ отменен',
+            'message': 'Заказ был отменен. Если есть вопросы - обращайтесь в поддержку.'
+        }
+    }
+    
+    status_info = status_messages.get(new_status, {
+        'emoji': '📝',
+        'title': 'Статус обновлен',
+        'message': f'Статус вашего заказа изменен на: {new_status}'
+    })
+    
+    # Формируем красивое уведомление
+    notification_text = f"""
+{status_info['emoji']} <b>{status_info['title']}</b>
+
+📝 <b>Заказ #{order['id']}:</b> {order['title']}
+📚 <b>Предмет:</b> {order['subject']['name']}
+⏰ <b>Дедлайн:</b> {order['deadline']}
+
+💬 <b>Сообщение:</b>
+{status_info['message']}
+    """.strip()
+    
+    # Добавляем дополнительную информацию для некоторых статусов
+    if new_status == 'completed':
+        notification_text += "\n\n📱 Откройте приложение или воспользуйтесь кнопкой '📥 Скачать файлы' в меню бота для получения готовых файлов."
+    elif new_status == 'needs_revision':
+        if order.get('revision_comment'):
+            notification_text += f"\n\n📋 <b>Комментарий:</b>\n{order['revision_comment']}"
+    
+    notification_text += "\n\n💬 Используйте меню бота для управления заказами"
+    
+    # Создаем reply keyboard для уведомления
+    keyboard = {
+        "keyboard": [
+            [
+                {"text": "📱 Открыть приложение", "web_app": {"url": f"https://bbifather.ru?telegram={user_telegram}"}},
+            ],
+            [
+                {"text": "💬 Техподдержка"},
+                {"text": "📥 Скачать файлы"}
+            ]
+        ],
+        "resize_keyboard": True,
+        "one_time_keyboard": False,
+        "input_field_placeholder": "Выберите действие из меню ниже"
+    }
+    
+    try:
+        clean_username = user_telegram.lstrip('@')
+        telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        
+        payload = {
+            'chat_id': f'@{clean_username}',
+            'text': notification_text,
+            'parse_mode': 'HTML',
+            'reply_markup': keyboard
+        }
+        
+        response = requests.post(telegram_url, json=payload, timeout=10)
+        
+        if response.status_code == 200:
+            print(f"✅ Уведомление о статусе '{new_status}' отправлено пользователю @{clean_username}")
+        else:
+            print(f"⚠️ Не удалось отправить уведомление @{clean_username}: {response.text}")
+            
+    except Exception as e:
+        print(f"❌ Ошибка отправки уведомления пользователю {user_telegram}: {e}")
 
 # Старый startup удален - теперь используем lifespan
 
@@ -338,7 +452,7 @@ async def create_order(request: Request):
         # Получаем созданный заказ с связанными данными
         created_order = get_order(order_id)
         
-        # Отправляем уведомление о новом заказе
+        # Отправляем уведомление администратору о новом заказе
         try:
             message = f"""
 🆕 Новый заказ #{order_id}
@@ -365,7 +479,13 @@ async def create_order(request: Request):
             
             send_notification(message)
         except Exception as e:
-            print(f"⚠️ Ошибка отправки уведомления: {e}")
+            print(f"⚠️ Ошибка отправки уведомления администратору: {e}")
+        
+        # Отправляем уведомление пользователю о создании заказа
+        try:
+            await send_status_notification_to_user(created_order, 'new')
+        except Exception as e:
+            print(f"⚠️ Ошибка отправки уведомления пользователю: {e}")
         
         return created_order
         
@@ -400,63 +520,7 @@ async def update_order_status(order_id: int, request: Request):
         
         # Отправляем уведомление пользователю о изменении статуса
         if old_order['status'] != status and updated_order['student'].get('telegram'):
-            try:
-                status_messages = {
-                    'paid': '💳 Оплата подтверждена! Ваш заказ принят в работу.',
-                    'in_progress': '⚙️ Работа началась! Мы приступили к выполнению вашего заказа.',
-                    'completed': '✅ Работа выполнена! Готовые файлы доступны в приложении.',
-                    'needs_revision': '🔄 Требуются исправления. Проверьте детали в приложении.',
-                }
-                
-                status_message = status_messages.get(status)
-                if status_message:
-                    user_message = f"""
-🔔 <b>Обновление по заказу #{order_id}</b>
-
-📝 <b>Заказ:</b> {updated_order['title']}
-📊 <b>Статус:</b> {status_message}
-
-Детали заказа доступны в приложении 👇
-                    """.strip()
-                    
-                    # Отправляем уведомление пользователю через простой HTTP запрос
-                    user_telegram = updated_order['student']['telegram']
-                    if user_telegram:
-                        try:
-                            # Используем простой HTTP запрос к Telegram API
-                            bot_token = BOT_TOKEN
-                            clean_username = user_telegram.lstrip('@')
-                            
-                            notification_text = f"""
-🔔 <b>Обновление по заказу #{order_id}</b>
-
-📝 <b>Заказ:</b> {updated_order['title']}
-📊 <b>Статус:</b> {status_message}
-
-Детали заказа доступны в приложении и боте 👇
-
-Нажмите /start чтобы открыть меню
-                            """.strip()
-                            
-                            telegram_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-                            payload = {
-                                'chat_id': f'@{clean_username}',
-                                'text': notification_text,
-                                'parse_mode': 'HTML'
-                            }
-                            
-                            response = requests.post(telegram_url, json=payload, timeout=10)
-                            
-                            if response.status_code == 200:
-                                print(f"✅ Уведомление отправлено пользователю @{clean_username}")
-                            else:
-                                print(f"⚠️ Не удалось отправить уведомление @{clean_username}: {response.text}")
-                                
-                        except Exception as notification_error:
-                            print(f"⚠️ Ошибка отправки уведомления пользователю: {notification_error}")
-                            print(f"📱 УВЕДОМЛЕНИЕ ПОЛЬЗОВАТЕЛЮ @{user_telegram}: {status_message}")
-            except Exception as e:
-                print(f"⚠️ Ошибка отправки уведомления пользователю: {e}")
+            await send_status_notification_to_user(updated_order, status)
         
         return updated_order
         
@@ -578,7 +642,11 @@ startxref 467
         
         print(f"📎 Файлы добавлены к заказу {order_id}: {saved_files}")
         
-        return get_order(order_id)
+        # Получаем обновленный заказ и отправляем уведомление пользователю
+        updated_order = get_order(order_id)
+        await send_status_notification_to_user(updated_order, 'completed')
+        
+        return updated_order
         
     except HTTPException:
         raise
@@ -720,6 +788,58 @@ async def notify_payment(order_id: int):
         send_notification(message)
         print(f"💰 Отправлено уведомление об оплате заказа #{order_id}")
         
+        # Отправляем уведомление пользователю о получении заявки на оплату
+        try:
+            notification_text = f"""
+💳 <b>Заявка на оплату получена</b>
+
+📝 <b>Заказ #{order['id']}:</b> {order['title']}
+📚 <b>Предмет:</b> {order['subject']['name']}
+💰 <b>Сумма:</b> {order.get('actual_price', order['subject']['price'])} ₽
+
+💬 <b>Сообщение:</b>
+Ваша заявка на оплату получена и проверяется администратором. После подтверждения оплаты статус заказа будет обновлен.
+
+Обычно проверка занимает от 15 минут до нескольких часов.
+            """.strip()
+            
+            user_telegram = order['student']['telegram']
+            clean_username = user_telegram.lstrip('@')
+            
+            # Создаем reply keyboard
+            keyboard = {
+                "keyboard": [
+                    [
+                        {"text": "📱 Открыть приложение", "web_app": {"url": f"https://bbifather.ru?telegram={user_telegram}"}},
+                    ],
+                    [
+                        {"text": "💬 Техподдержка"},
+                        {"text": "📋 Правила"}
+                    ]
+                ],
+                "resize_keyboard": True,
+                "one_time_keyboard": False,
+                "input_field_placeholder": "Выберите действие из меню ниже"
+            }
+            
+            telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+            payload = {
+                'chat_id': f'@{clean_username}',
+                'text': notification_text,
+                'parse_mode': 'HTML',
+                'reply_markup': keyboard
+            }
+            
+            response = requests.post(telegram_url, json=payload, timeout=10)
+            
+            if response.status_code == 200:
+                print(f"✅ Уведомление о заявке на оплату отправлено пользователю @{clean_username}")
+            else:
+                print(f"⚠️ Не удалось отправить уведомление @{clean_username}: {response.text}")
+                
+        except Exception as e:
+            print(f"❌ Ошибка отправки уведомления пользователю: {e}")
+        
         return {"status": "notification_sent", "order_id": order_id}
         
     except HTTPException:
@@ -773,8 +893,12 @@ async def request_order_revision(order_id: int, request: Request):
         send_notification(message)
         print(f"🔄 Отправлено уведомление о запросе исправлений для заказа #{order_id}")
         
+        # Отправляем уведомление пользователю о необходимости исправлений
+        updated_order = get_order(order_id)
+        await send_status_notification_to_user(updated_order, 'needs_revision')
+        
         # Возвращаем обновленный заказ
-        return get_order(order_id)
+        return updated_order
         
     except HTTPException:
         raise
