@@ -49,11 +49,14 @@ class BBIFatherBot:
         self.app.add_handler(CommandHandler("support", self.support_command))
         self.app.add_handler(CommandHandler("download", self.download_command))
         
-        # Обработчик нажатий на кнопки
+        # Обработчик нажатий на кнопки (ВАЖНО: должен быть первым среди CallbackQuery!)
         self.app.add_handler(CallbackQueryHandler(self.button_callback))
         
         # Обработчик текстовых сообщений для тех поддержки
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+        
+        # Дополнительное логирование
+        logger.info("🔧 Все обработчики зарегистрированы")
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка команды /start"""
@@ -142,36 +145,86 @@ class BBIFatherBot:
         query = update.callback_query
         user = update.effective_user
         
-        logger.info(f"🔘 Нажата кнопка: {query.data} пользователем {user.username or user.first_name}")
+        logger.info(f"🔘 CALLBACK ПОЛУЧЕН! Кнопка: {query.data} от {user.username or user.first_name}")
         
+        # Сначала отвечаем на callback query
         try:
             await query.answer()
-            
+            logger.info(f"✅ Callback query answered для {query.data}")
+        except Exception as e:
+            logger.error(f"❌ Ошибка ответа на callback: {e}")
+            return
+        
+        # Простая обработка для тестирования
+        try:
             if query.data == "rules":
-                logger.info("📋 Показываем правила")
-                await self.send_rules(update, context, edit=True)
+                logger.info("📋 Обрабатываем кнопку 'Правила'")
+                await query.edit_message_text(
+                    "📋 <b>Правила BBI Father</b>\n\nЭто тестовое сообщение правил.\nКнопка работает!",
+                    parse_mode='HTML',
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")
+                    ]])
+                )
             elif query.data == "support":
-                logger.info("💬 Показываем техподдержку")
-                await self.handle_support_request(update, context, edit=True)
+                logger.info("💬 Обрабатываем кнопку 'Техподдержка'")
+                await query.edit_message_text(
+                    f"💬 <b>Техподдержка</b>\n\nСвяжитесь с админом: @{ADMIN_USERNAME}",
+                    parse_mode='HTML',
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton(f"✉️ Написать @{ADMIN_USERNAME}", url=f"https://t.me/{ADMIN_USERNAME}")
+                    ], [
+                        InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")
+                    ]])
+                )
             elif query.data == "help":
-                logger.info("ℹ️ Показываем справку")
-                await self.send_user_guide(update, context, edit=True)
+                logger.info("ℹ️ Обрабатываем кнопку 'Справка'")
+                await query.edit_message_text(
+                    "ℹ️ <b>Справка</b>\n\nЭто справочная информация.\nКнопка работает!",
+                    parse_mode='HTML',
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")
+                    ]])
+                )
             elif query.data == "download":
-                logger.info("📥 Обрабатываем запрос скачивания")
-                await self.handle_download_request(update, context)
-            elif query.data.startswith("download_"):
-                order_id = int(query.data.split("_")[1])
-                logger.info(f"📤 Отправляем файлы заказа {order_id}")
-                await self.send_order_files(update, context, order_id)
+                logger.info("📥 Обрабатываем кнопку 'Скачать'")
+                await query.edit_message_text(
+                    "📥 <b>Скачивание файлов</b>\n\nФункция в разработке.\nКнопка работает!",
+                    parse_mode='HTML',
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")
+                    ]])
+                )
             elif query.data == "back_to_menu":
-                logger.info("🔙 Возврат в главное меню")
-                await self.back_to_main_menu(update, context)
+                logger.info("🔙 Возвращаемся в главное меню")
+                user = update.effective_user
+                welcome_text = f"""
+👋 Привет, {user.first_name}!
+
+Добро пожаловать в <b>BBI Father</b> - сервис для заказа практических работ!
+
+🎓 Здесь вы можете:
+• Заказать выполнение лабораторных работ
+• Отслеживать статус ваших заказов  
+• Получать готовые работы прямо в Telegram
+
+Выберите действие из меню ниже:
+                """.strip()
+                
+                keyboard = self.get_main_keyboard(user.username)
+                await query.edit_message_text(welcome_text, reply_markup=keyboard, parse_mode='HTML')
             else:
                 logger.warning(f"❓ Неизвестная кнопка: {query.data}")
+                await query.edit_message_text("❓ Неизвестная команда")
                 
         except Exception as e:
-            logger.error(f"❌ Ошибка обработки кнопки {query.data}: {e}")
-            await query.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
+            logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА в button_callback: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            try:
+                await query.edit_message_text("❌ Произошла ошибка. Попробуйте позже.")
+            except:
+                pass
 
     async def send_rules(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edit: bool = False):
         """Отправка правил пользования сервисом"""
@@ -635,12 +688,20 @@ class BBIFatherBot:
 def main():
     """Главная функция"""
     try:
+        logger.info("🚀 Инициализация BBI Father Telegram Bot...")
         bot = BBIFatherBot()
         logger.info("🤖 BBI Father Telegram Bot запущен успешно!")
+        
+        # Проверяем зарегистрированные handlers
+        handlers = bot.app.handlers
+        logger.info(f"📋 Зарегистрировано handlers: {len(handlers[0])} в группе 0")
+        
         # Запускаем бота
         bot.run()
     except Exception as e:
         logger.error(f"❌ Критическая ошибка: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
     finally:
         logger.info("🔄 Завершение работы бота...")
 
