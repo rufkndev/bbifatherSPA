@@ -7,9 +7,6 @@ Telegram Bot для BBI Father
 import os
 import asyncio
 import logging
-import requests
-import json
-from datetime import datetime
 from typing import Optional
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
@@ -26,12 +23,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Константы
+# Константы для бота (только то что нужно боту)
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 ADMIN_CHAT_ID = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "")  # ID администратора для тех поддержки
-ADMIN_USERNAME = os.getenv("TELEGRAM_ADMIN_USERNAME", "bbifatheradmin")  # Username администратора
+ADMIN_USERNAME = os.getenv("TELEGRAM_ADMIN_USERNAME", "bbifatheradmin")  # Username администратора  
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://bbifather.ru")
-API_BASE_URL = os.getenv("API_BASE_URL", "https://bbifather.ru/api")  # URL для API запросов
 
 if not BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN не задан в .env файле!")
@@ -43,6 +39,9 @@ class BBIFatherBot:
 
     def setup_handlers(self):
         """Настройка обработчиков команд и сообщений"""
+        # КРИТИЧЕСКИ ВАЖНО: CallbackQueryHandler должен быть ПЕРВЫМ!
+        self.app.add_handler(CallbackQueryHandler(self.button_callback))
+        
         # Команды
         self.app.add_handler(CommandHandler("start", self.start_command))
         self.app.add_handler(CommandHandler("help", self.help_command))
@@ -50,10 +49,7 @@ class BBIFatherBot:
         self.app.add_handler(CommandHandler("support", self.support_command))
         self.app.add_handler(CommandHandler("download", self.download_command))
         
-        # Обработчик нажатий на кнопки (ВАЖНО: должен быть первым среди CallbackQuery!)
-        self.app.add_handler(CallbackQueryHandler(self.button_callback))
-        
-        # Обработчик текстовых сообщений для тех поддержки
+        # Обработчик текстовых сообщений для тех поддержки (ДОЛЖЕН быть ПОСЛЕДНИМ!)
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         
         # Дополнительное логирование
@@ -143,20 +139,30 @@ class BBIFatherBot:
 
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка нажатий на inline кнопки"""
+        # КРИТИЧЕСКАЯ ПРОВЕРКА: есть ли callback_query
+        if not update.callback_query:
+            logger.error("❌ CRITICAL: update.callback_query is None!")
+            return
+            
         query = update.callback_query
         user = update.effective_user
         
-        logger.info(f"🔘 CALLBACK ПОЛУЧЕН! Кнопка: {query.data} от {user.username or user.first_name}")
+        logger.info(f"🔘 CALLBACK ПОЛУЧЕН! Кнопка: '{query.data}' от {user.username or user.first_name} (ID: {user.id})")
         
-        # Сначала отвечаем на callback query
+        # Сначала отвечаем на callback query - ОБЯЗАТЕЛЬНО!
         try:
             await query.answer()
-            logger.info(f"✅ Callback query answered для {query.data}")
+            logger.info(f"✅ Callback query answered для '{query.data}'")
         except Exception as e:
-            logger.error(f"❌ Ошибка ответа на callback: {e}")
-            return
+            logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА query.answer(): {e}")
+            # Пробуем повторно без параметров
+            try:
+                await query.answer()
+            except Exception as e2:
+                logger.error(f"❌ ПОВТОРНАЯ ОШИБКА query.answer(): {e2}")
+                return
         
-        # Простая обработка для тестирования
+        # Обработка callback'ов
         try:
             if query.data == "rules":
                 logger.info("📋 Обрабатываем кнопку 'Правила'")
@@ -189,7 +195,19 @@ class BBIFatherBot:
                 )
             elif query.data == "download":
                 logger.info("📥 Обрабатываем кнопку 'Скачать файлы'")
-                await self.handle_download_request(update, context)
+                await query.edit_message_text(
+                    "📥 <b>Скачивание файлов</b>\n\n"
+                    "Для скачивания готовых файлов:\n"
+                    "1. Откройте веб-приложение\n"
+                    "2. Перейдите в раздел 'Мои заказы'\n"
+                    "3. Нажмите кнопку скачивания у нужного заказа\n\n"
+                    "Файлы также приходят в уведомлениях при готовности.",
+                    parse_mode='HTML',
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("📱 Открыть приложение", web_app=WebAppInfo(url=WEB_APP_URL)),
+                        InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")
+                    ]])
+                )
             elif query.data == "back_to_menu":
                 logger.info("🔙 Возвращаемся в главное меню")
                 user = update.effective_user
@@ -210,8 +228,17 @@ class BBIFatherBot:
                 await query.edit_message_text(welcome_text, reply_markup=keyboard, parse_mode='HTML')
             elif query.data.startswith("download_"):
                 logger.info(f"📥 Обрабатываем скачивание заказа")
-                order_id = int(query.data.split("_")[1])
-                await self.send_order_files(update, context, order_id)
+                order_id = query.data.split("_")[1]
+                await query.edit_message_text(
+                    f"📥 <b>Скачивание заказа #{order_id}</b>\n\n"
+                    "Скачивание файлов теперь доступно в веб-приложении.\n"
+                    "Откройте приложение и перейдите в раздел 'Мои заказы'.",
+                    parse_mode='HTML',
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("📱 Открыть приложение", web_app=WebAppInfo(url=WEB_APP_URL)),
+                        InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")
+                    ]])
+                )
             else:
                 logger.warning(f"❓ Неизвестная кнопка: {query.data}")
                 await query.edit_message_text("❓ Неизвестная команда")
@@ -356,7 +383,7 @@ class BBIFatherBot:
 👤 <b>Пользователь:</b> {user.full_name}
 🆔 <b>Username:</b> @{user.username or 'не указан'}
 📱 <b>Telegram ID:</b> <code>{user.id}</code>
-🕐 <b>Время:</b> {datetime.now().strftime('%d.%m.%Y %H:%M')}
+🕐 <b>Время:</b> сейчас
 
 💬 <b>Сообщение:</b>
 {message_text}
@@ -452,297 +479,35 @@ class BBIFatherBot:
                 parse_mode='HTML'
             )
 
-    async def handle_download_request(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка запроса на скачивание файлов"""
-        user = update.effective_user
-        user_telegram = user.username
-        
-        logger.info(f"📥 DOWNLOAD REQUEST: Пользователь {user_telegram or user.first_name} запрашивает файлы")
-        
-        if not user_telegram:
-            logger.warning("❌ У пользователя не указан username")
-            await update.callback_query.answer("❌ У вас не указан username в Telegram!")
-            await update.callback_query.edit_message_text(
-                "❌ <b>Ошибка доступа</b>\n\n"
-                "У вас не указан username в Telegram.\n"
-                "Установите username в настройках Telegram и повторите попытку.",
-                parse_mode='HTML',
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
-                ])
-            )
-            return
-            
-        try:
-            logger.info(f"🌐 API REQUEST: {API_BASE_URL}/orders?telegram={user_telegram}&limit=50")
-            
-            # Получаем заказы пользователя с готовыми файлами
-            response = requests.get(
-                f"{API_BASE_URL}/orders",
-                params={'telegram': user_telegram, 'limit': 50},
-                timeout=10
-            )
-            
-            logger.info(f"📡 API RESPONSE: Status {response.status_code}")
-            
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                    logger.info(f"📊 API DATA: Получено заказов: {len(data.get('orders', []))}")
-                    
-                    orders_with_files = [
-                        order for order in data.get('orders', [])
-                        if order.get('status') == 'completed' and order.get('files')
-                    ]
-                    
-                    logger.info(f"📁 ORDERS WITH FILES: Найдено заказов с файлами: {len(orders_with_files)}")
-                    
-                    if not orders_with_files:
-                        logger.info("📭 Нет готовых заказов с файлами")
-                        await update.callback_query.edit_message_text(
-                            "📭 У вас пока нет готовых работ для скачивания.\n\n"
-                            "Готовые файлы появятся здесь после завершения заказов.",
-                            reply_markup=InlineKeyboardMarkup([
-                                [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
-                            ])
-                        )
-                        return
-                except json.JSONDecodeError as json_error:
-                    logger.error(f"❌ JSON ERROR: Ошибка парсинга ответа API: {json_error}")
-                    await update.callback_query.edit_message_text(
-                        "❌ Ошибка обработки данных с сервера.\n\nПопробуйте позже.",
-                        reply_markup=InlineKeyboardMarkup([
-                            [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
-                        ])
-                    )
-                    return
-                
-                # Создаем кнопки для каждого заказа
-                keyboard = []
-                for order in orders_with_files[:10]:  # Показываем максимум 10 заказов
-                    keyboard.append([InlineKeyboardButton(
-                        f"📥 {order['title'][:30]}... (#{order['id']})",
-                        callback_data=f"download_{order['id']}"
-                    )])
-                
-                keyboard.append([InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")])
-                
-                await update.callback_query.edit_message_text(
-                    f"📥 <b>Доступные для скачивания работы:</b>\n\n"
-                    f"Найдено {len(orders_with_files)} готовых работ.\n"
-                    f"Выберите заказ для скачивания файлов:",
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode='HTML'
-                )
-            else:
-                logger.error(f"❌ API ERROR: HTTP {response.status_code} - {response.text}")
-                if response.status_code == 404:
-                    error_msg = "❌ Пользователь не найден в системе.\n\nОбратитесь к администратору для регистрации."
-                elif response.status_code == 500:
-                    error_msg = "❌ Внутренняя ошибка сервера.\n\nПопробуйте позже или обратитесь в техподдержку."
-                elif response.status_code == 403:
-                    error_msg = "❌ Доступ запрещен.\n\nПроверьте свои права доступа."
-                else:
-                    error_msg = f"❌ Ошибка сервера (HTTP {response.status_code}).\n\nПопробуйте позже."
-                    
-                await update.callback_query.edit_message_text(
-                    error_msg,
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
-                    ])
-                )
-                
-        except requests.exceptions.Timeout:
-            logger.error("⏰ TIMEOUT: API запрос превысил время ожидания")
-            await update.callback_query.edit_message_text(
-                "❌ <b>Превышено время ожидания</b>\n\n"
-                "Сервер не отвечает. Попробуйте позже.",
-                parse_mode='HTML',
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
-                ])
-            )
-        except requests.exceptions.ConnectionError:
-            logger.error("🌐 CONNECTION ERROR: Не удается подключиться к API серверу")
-            await update.callback_query.edit_message_text(
-                "❌ <b>Нет соединения с сервером</b>\n\n"
-                "Проверьте интернет-соединение или попробуйте позже.",
-                parse_mode='HTML',
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
-                ])
-            )
-        except Exception as e:
-            logger.error(f"❌ UNEXPECTED ERROR: Неожиданная ошибка при обработке запроса: {e}")
-            import traceback
-            logger.error(f"TRACEBACK: {traceback.format_exc()}")
-            await update.callback_query.edit_message_text(
-                "❌ <b>Произошла неожиданная ошибка</b>\n\n"
-                "Обратитесь в техподдержку, если проблема повторяется.",
-                parse_mode='HTML',
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
-                ])
-            )
 
     async def download_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Команда /download для скачивания файлов"""
-        await self.handle_download_request(update, context)
+        await update.message.reply_text(
+            "📥 <b>Скачивание файлов</b>\n\n"
+            "Для скачивания готовых файлов:\n"
+            "1. Откройте веб-приложение\n" 
+            "2. Перейдите в раздел 'Мои заказы'\n"
+            "3. Нажмите кнопку скачивания у нужного заказа\n\n"
+            "Файлы также приходят в уведомлениях при готовности.",
+            parse_mode='HTML',
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("📱 Открыть приложение", web_app=WebAppInfo(url=WEB_APP_URL))
+            ]])
+        )
 
-    async def send_order_files(self, update: Update, context: ContextTypes.DEFAULT_TYPE, order_id: int):
-        """Отправка файлов заказа пользователю"""
-        try:
-            # Получаем информацию о заказе
-            response = requests.get(f"{API_BASE_URL}/orders/{order_id}")
-            
-            if response.status_code != 200:
-                await update.callback_query.edit_message_text(
-                    "❌ Заказ не найден или недоступен.",
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
-                    ])
-                )
-                return
-            
-            order = response.json()
-            files = order.get('files', [])
-            
-            if not files:
-                await update.callback_query.edit_message_text(
-                    f"📭 В заказе #{order_id} пока нет файлов.",
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
-                    ])
-                )
-                return
-            
-            # Отправляем сообщение о начале отправки файлов
-            await update.callback_query.edit_message_text(
-                f"📤 <b>Отправляем файлы для заказа #{order_id}</b>\n\n"
-                f"📝 <b>Название:</b> {order['title']}\n"
-                f"📁 <b>Файлов:</b> {len(files)}\n\n"
-                f"Пожалуйста, подождите...",
-                parse_mode='HTML'
-            )
-            
-            # Отправляем каждый файл
-            files_sent = 0
-            for filename in files:
-                try:
-                    # Скачиваем файл с сервера
-                    file_response = requests.get(
-                        f"{API_BASE_URL}/orders/{order_id}/download/{filename}",
-                        stream=True
-                    )
-                    
-                    if file_response.status_code == 200:
-                        # Отправляем файл пользователю
-                        await context.bot.send_document(
-                            chat_id=update.effective_user.id,
-                            document=file_response.content,
-                            filename=filename,
-                            caption=f"📎 Файл из заказа #{order_id}: {order['title']}"
-                        )
-                        files_sent += 1
-                        
-                except Exception as file_error:
-                    logger.error(f"Ошибка отправки файла {filename}: {file_error}")
-                    await context.bot.send_message(
-                        chat_id=update.effective_user.id,
-                        text=f"❌ Не удалось отправить файл: {filename}"
-                    )
-            
-            # Итоговое сообщение
-            if files_sent > 0:
-                final_message = (
-                    f"✅ <b>Файлы успешно отправлены!</b>\n\n"
-                    f"📝 <b>Заказ:</b> #{order_id} - {order['title']}\n"
-                    f"📁 <b>Отправлено файлов:</b> {files_sent} из {len(files)}\n\n"
-                    f"Все файлы сохранены в чате выше 👆"
-                )
-            else:
-                final_message = (
-                    f"❌ <b>Не удалось отправить файлы</b>\n\n"
-                    f"Попробуйте позже или обратитесь в техподдержку."
-                )
-            
-            await context.bot.send_message(
-                chat_id=update.effective_user.id,
-                text=final_message,
-                parse_mode='HTML',
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
-                ])
-            )
-                
-        except Exception as e:
-            logger.error(f"Ошибка при отправке файлов заказа {order_id}: {e}")
-            await context.bot.send_message(
-                chat_id=update.effective_user.id,
-                text="❌ Произошла ошибка при отправке файлов. Попробуйте позже.",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
-                ])
-            )
 
-    @staticmethod
-    async def send_status_notification(user_telegram: str, order_id: int, status: str, order_title: str):
-        """Статический метод для отправки уведомлений о статусе пользователям"""
-        try:
-            status_messages = {
-                'paid': '💳 Оплата подтверждена! Ваш заказ принят в работу.',
-                'in_progress': '⚙️ Работа началась! Мы приступили к выполнению вашего заказа.',
-                'completed': '✅ Работа выполнена! Готовые файлы доступны в приложении и боте.',
-                'needs_revision': '🔄 Требуются исправления. Проверьте детали в приложении.',
-            }
-            
-            status_message = status_messages.get(status)
-            if not status_message:
-                return
-            
-            # Получаем user_id по username
-            bot_token = BOT_TOKEN
-            
-            # Сначала пробуем найти пользователя через getUpdates или используем username напрямую
-            message_text = f"""
-🔔 <b>Обновление по заказу #{order_id}</b>
-
-📝 <b>Заказ:</b> {order_title}
-📊 <b>Статус:</b> {status_message}
-
-Детали заказа доступны в приложении и боте 👇
-
-Нажмите /start чтобы открыть меню
-            """.strip()
-            
-            # Отправляем уведомление через Telegram API
-            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-            
-            # Пробуем отправить по username (если начинается с @, убираем его)
-            clean_username = user_telegram.lstrip('@')
-            
-            payload = {
-                'chat_id': f'@{clean_username}',
-                'text': message_text,
-                'parse_mode': 'HTML'
-            }
-            
-            response = requests.post(url, json=payload, timeout=10)
-            
-            if response.status_code == 200:
-                logger.info(f"✅ Уведомление отправлено пользователю @{clean_username}")
-            else:
-                logger.warning(f"⚠️ Не удалось отправить уведомление @{clean_username}: {response.text}")
-                
-        except Exception as e:
-            logger.error(f"❌ Ошибка отправки уведомления пользователю {user_telegram}: {e}")
 
     def run(self):
         """Запуск бота"""
         logger.info("🤖 Запуск BBI Father Telegram Bot...")
+        
         try:
-            # Запускаем polling в синхронном режиме
-            self.app.run_polling(drop_pending_updates=True)
+            # Запускаем polling с правильными настройками
+            self.app.run_polling(
+                drop_pending_updates=True,
+                close_loop=False,
+                stop_signals=None  # Для Windows
+            )
         except KeyboardInterrupt:
             logger.info("👋 Бот остановлен пользователем")
         except Exception as e:
@@ -760,20 +525,13 @@ def main():
             logger.error("❌ TELEGRAM_BOT_TOKEN не задан!")
             return
             
-        logger.info(f"🌐 API_BASE_URL: {API_BASE_URL}")
-        logger.info(f"💬 ADMIN_USERNAME: {ADMIN_USERNAME}")
-        
         if ADMIN_CHAT_ID:
-            logger.info(f"👨‍💼 ADMIN_CHAT_ID настроен")
+            logger.info("👨‍💼 Техподдержка настроена")
         else:
-            logger.warning("⚠️ ADMIN_CHAT_ID не настроен")
+            logger.warning("⚠️ Техподдержка не настроена")
         
         bot = BBIFatherBot()
-        logger.info("🤖 BBI Father Telegram Bot запущен успешно!")
-        
-        # Проверяем зарегистрированные handlers
-        handlers = bot.app.handlers
-        logger.info(f"📋 Зарегистрировано handlers: {len(handlers[0])} в группе 0")
+        logger.info("🤖 BBI Father Telegram Bot запущен!")
         
         # Запускаем бота
         bot.run()
