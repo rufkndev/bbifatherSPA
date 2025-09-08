@@ -111,6 +111,20 @@ export const downloadAllFiles = async (orderId: number): Promise<void> => {
   window.URL.revokeObjectURL(url);
 };
 
+// Новая функция для отправки файлов в Telegram
+export const sendFilesToTelegram = async (orderId: number, telegram: string): Promise<{
+  status: string;
+  message: string;
+  sent_count: number;
+  total_files: number;
+}> => {
+  const response = await api.post('/api/send-files-to-telegram', {
+    order_id: orderId,
+    telegram: telegram
+  });
+  return response.data;
+};
+
 // Students API
 export const getStudents = async (): Promise<Student[]> => {
   const response = await api.get('/api/students');

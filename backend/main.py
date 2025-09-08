@@ -301,6 +301,132 @@ async def save_chat_id_direct(request: Request):
     """Сохранение chat_id пользователя для отправки уведомлений (без префикса /api/)"""
     return await save_chat_id_handler(request)
 
+async def send_files_to_telegram_handler(request: Request):
+    """Общий обработчик для отправки файлов заказа в Telegram"""
+    try:
+        data = await request.json()
+        order_id = data.get('order_id')
+        telegram_username = data.get('telegram', '').lstrip('@')
+        
+        print(f"📁 Запрос на отправку файлов заказа #{order_id} для @{telegram_username}")
+        
+        if not order_id or not telegram_username:
+            raise HTTPException(status_code=400, detail="Не указан order_id или telegram")
+        
+        # Получаем заказ с файлами
+        order = get_order(order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        
+        # Проверяем что заказ принадлежит пользователю
+        if order['student']['telegram'] != telegram_username:
+            raise HTTPException(status_code=403, detail="Доступ запрещен")
+        
+        # Проверяем что у заказа есть файлы
+        files = order.get('files', [])
+        if not files:
+            raise HTTPException(status_code=404, detail="У заказа нет файлов")
+        
+        # Получаем chat_id пользователя
+        student_response = supabase.table('students').select('chat_id').eq('telegram', telegram_username).limit(1).execute()
+        
+        if not student_response.data or not student_response.data[0].get('chat_id'):
+            raise HTTPException(status_code=404, detail="Chat ID не найден. Напишите боту /start")
+        
+        user_chat_id = student_response.data[0]['chat_id']
+        print(f"📱 Отправляем файлы пользователю с chat_id: {user_chat_id}")
+        
+        # Отправляем сообщение с информацией о заказе
+        intro_message = f"""
+📁 <b>Файлы заказа #{order_id}</b>
+
+📝 <b>Название:</b> {order['title']}
+📚 <b>Предмет:</b> {order['subject']['name']}
+📊 <b>Статус:</b> {order['status']}
+
+📎 Отправляю файлы ({len(files)} шт.):
+        """.strip()
+        
+        telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        intro_payload = {
+            'chat_id': user_chat_id,
+            'text': intro_message,
+            'parse_mode': 'HTML'
+        }
+        
+        requests.post(telegram_url, json=intro_payload, timeout=10)
+        
+        # Отправляем каждый файл
+        sent_count = 0
+        for file_info in files:
+            try:
+                file_url = file_info.get('url')
+                file_name = file_info.get('name', 'file')
+                
+                if not file_url:
+                    print(f"❌ У файла {file_name} нет URL")
+                    continue
+                
+                print(f"📎 Отправляем файл: {file_name}")
+                
+                # Отправляем файл через Telegram Bot API
+                send_document_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
+                document_payload = {
+                    'chat_id': user_chat_id,
+                    'document': file_url,
+                    'caption': f"📎 {file_name}"
+                }
+                
+                response = requests.post(send_document_url, json=document_payload, timeout=30)
+                
+                if response.status_code == 200:
+                    print(f"✅ Файл {file_name} отправлен")
+                    sent_count += 1
+                else:
+                    print(f"❌ Ошибка отправки файла {file_name}: {response.text}")
+                    
+            except Exception as e:
+                print(f"❌ Ошибка при отправке файла {file_name}: {e}")
+        
+        # Отправляем итоговое сообщение
+        if sent_count > 0:
+            final_message = f"✅ Отправлено {sent_count} из {len(files)} файлов заказа #{order_id}"
+        else:
+            final_message = f"❌ Не удалось отправить файлы заказа #{order_id}"
+        
+        final_payload = {
+            'chat_id': user_chat_id,
+            'text': final_message,
+            'parse_mode': 'HTML'
+        }
+        
+        requests.post(telegram_url, json=final_payload, timeout=10)
+        
+        return {
+            "status": "success", 
+            "message": f"Отправлено {sent_count} из {len(files)} файлов",
+            "sent_count": sent_count,
+            "total_files": len(files)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Ошибка отправки файлов в Telegram: {e}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Ошибка сервера: {str(e)}")
+
+@app.post("/api/send-files-to-telegram")
+async def send_files_to_telegram_api(request: Request):
+    """Отправка файлов заказа в Telegram (с префиксом /api/)"""
+    return await send_files_to_telegram_handler(request)
+
+@app.post("/send-files-to-telegram")
+async def send_files_to_telegram_direct(request: Request):
+    """Отправка файлов заказа в Telegram (без префикса /api/)"""
+    return await send_files_to_telegram_handler(request)
+
 # Students endpoints
 @app.get("/api/students")
 def get_students():

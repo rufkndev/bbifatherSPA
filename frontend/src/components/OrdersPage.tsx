@@ -28,7 +28,7 @@ import {
   Logout as LogoutIcon,
 } from '@mui/icons-material';
 import { Order, OrderStatus } from '../types';
-import { getOrders, downloadFile, downloadAllFiles, api, requestOrderRevision } from '../api';
+import { getOrders, downloadFile, downloadAllFiles, sendFilesToTelegram, api, requestOrderRevision } from '../api';
 import { format, differenceInDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useTelegramWebApp } from '../hooks/useTelegramWebApp';
@@ -46,6 +46,7 @@ const OrdersPage: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(new Set());
+  const [sendingToTelegram, setSendingToTelegram] = useState<Set<number>>(new Set());
   const [paymentNotifications, setPaymentNotifications] = useState<Set<number>>(new Set());
   
   const [searchParams, setSearchParams] = useSearchParams();
@@ -175,6 +176,50 @@ const OrdersPage: React.FC = () => {
       setDownloadingFiles(prev => {
         const newSet = new Set(prev);
         newSet.delete(downloadKey);
+        return newSet;
+      });
+    }
+  };
+
+  const handleSendFilesToTelegram = async (orderId: number, telegram: string) => {
+    setSendingToTelegram(prev => new Set(prev).add(orderId));
+    
+    try {
+      // Тактильная обратная связь
+      hapticFeedback.impactLight();
+      
+      const result = await sendFilesToTelegram(orderId, telegram);
+      
+      // Показываем результат пользователю
+      const message = `✅ ${result.sent_count} из ${result.total_files} файлов отправлено в Telegram!`;
+      
+      if (isInTelegram) {
+        hapticFeedback.success();
+        showAlert(message);
+      } else {
+        alert(message);
+      }
+    } catch (error: any) {
+      console.error('Ошибка отправки файлов в Telegram:', error);
+      
+      let errorMessage = '❌ Ошибка отправки файлов';
+      
+      if (error?.response?.data?.detail) {
+        errorMessage = `❌ ${error.response.data.detail}`;
+      } else if (error?.message) {
+        errorMessage = `❌ ${error.message}`;
+      }
+      
+      if (isInTelegram) {
+        hapticFeedback.error();
+        showAlert(errorMessage);
+      } else {
+        alert(errorMessage);
+      }
+    } finally {
+      setSendingToTelegram(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
         return newSet;
       });
     }
@@ -660,20 +705,48 @@ const OrdersPage: React.FC = () => {
                        alignItems={{ xs: 'stretch', sm: 'center' }}
                        gap={{ xs: 1, sm: 0 }}
                      >
-                       <Box display="flex" gap={1}>
-                         {order.files && order.files.length > 0 &&
-                           <Button 
-                             size="small" 
-                             variant="contained" 
-                             onClick={() => handleDownloadAllFiles(order.id!)}
-                             sx={{
-                               py: { xs: 1, sm: 0.5 },
-                               fontSize: { xs: '0.8rem', sm: '0.875rem' }
-                             }}
-                           >
-                             Скачать
-                           </Button>
-                         }
+                       <Box display="flex" flexDirection="column" gap={1}>
+                         {order.files && order.files.length > 0 && (
+                           <>
+                             {/* Основная кнопка - отправить в Telegram */}
+                             {!isAdminView && currentUser && (
+                               <Button 
+                                 size="small" 
+                                 variant="contained" 
+                                 color="primary"
+                                 disabled={sendingToTelegram.has(order.id!)}
+                                 onClick={() => handleSendFilesToTelegram(order.id!, currentUser)}
+                                 sx={{
+                                   py: { xs: 1, sm: 0.5 },
+                                   fontSize: { xs: '0.8rem', sm: '0.875rem' },
+                                   fontWeight: 600
+                                 }}
+                               >
+                                 {sendingToTelegram.has(order.id!) ? 
+                                   '⏳ Отправляю...' : 
+                                   '📱 Отправить в Telegram'
+                                 }
+                               </Button>
+                             )}
+                             
+                             {/* Дополнительная кнопка - классическое скачивание */}
+                             <Button 
+                               size="small" 
+                               variant="outlined" 
+                               onClick={() => handleDownloadAllFiles(order.id!)}
+                               disabled={downloadingFiles.has(`${order.id}-all`) || sendingToTelegram.has(order.id!)}
+                               sx={{
+                                 py: { xs: 1, sm: 0.5 },
+                                 fontSize: { xs: '0.75rem', sm: '0.8rem' }
+                               }}
+                             >
+                               {downloadingFiles.has(`${order.id}-all`) ? 
+                                 '⏳ Скачиваю...' : 
+                                 '💾 Скачать в браузер'
+                               }
+                             </Button>
+                           </>
+                         )}
                        </Box>
                        <Typography 
                          variant="h6" 
