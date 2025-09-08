@@ -619,21 +619,26 @@ class BBIFatherBot:
         except Exception as e:
             logger.error(f"❌ Ошибка отправки уведомления пользователю {user_telegram}: {e}")
 
-    async def run(self):
+    def run(self):
         """Запуск бота"""
         logger.info("🤖 Запуск BBI Father Telegram Bot...")
-        await self.app.run_polling(drop_pending_updates=True)
+        try:
+            # Запускаем polling в синхронном режиме
+            self.app.run_polling(drop_pending_updates=True)
+        except KeyboardInterrupt:
+            logger.info("👋 Бот остановлен пользователем")
+        except Exception as e:
+            logger.error(f"❌ Ошибка при запуске: {e}")
+            raise
 
 
-async def main():
+def main():
     """Главная функция"""
     try:
         bot = BBIFatherBot()
         logger.info("🤖 BBI Father Telegram Bot запущен успешно!")
         # Запускаем бота
-        await bot.run()
-    except KeyboardInterrupt:
-        logger.info("👋 Бот остановлен пользователем")
+        bot.run()
     except Exception as e:
         logger.error(f"❌ Критическая ошибка: {e}")
     finally:
@@ -641,4 +646,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
