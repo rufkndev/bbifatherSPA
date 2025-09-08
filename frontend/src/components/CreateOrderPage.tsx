@@ -779,67 +779,79 @@ const CreateOrderPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: 'auto', px: 3, py: 4 }}>
-      {/* Header */}
+    <Box sx={{ 
+      maxWidth: 1200, 
+      mx: 'auto', 
+      px: { xs: 1, sm: 3 }, 
+      py: { xs: 2, sm: 4 } 
+    }}>
+      {/* Мобильный Header */}
       <Box 
         display="flex" 
-        alignItems="center" 
-        mb={4}
+        flexDirection={{ xs: 'column', sm: 'row' }}
+        alignItems={{ xs: 'stretch', sm: 'center' }}
+        mb={{ xs: 3, sm: 4 }}
         sx={{
           background: '#ffffff',
-          borderRadius: 8,
-          p: 3,
+          borderRadius: { xs: 6, sm: 8 },
+          p: { xs: 2, sm: 3 },
           border: '1px solid #e2e8f0',
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
         }}
       >
-        <IconButton 
-          onClick={() => navigate('/')} 
-          sx={{ 
-            mr: 3,
-            background: 'rgba(37, 99, 235, 0.1)',
-            border: '1px solid rgba(37, 99, 235, 0.2)',
-            borderRadius: 6,
-            p: 1.5,
-            '&:hover': {
-              background: 'rgba(37, 99, 235, 0.2)',
-            }
-          }}
-        >
-          <ArrowBack sx={{ color: '#2563eb' }} />
-        </IconButton>
-        
-        <Box sx={{ position: 'relative' }}>
-          <Typography 
-            variant="h2" 
+        <Box display="flex" alignItems="center" mb={{ xs: 2, sm: 0 }}>
+          <IconButton 
+            onClick={() => navigate('/')} 
             sx={{ 
-              fontWeight: 700, 
-              color: '#1e293b',
+              mr: { xs: 2, sm: 3 },
+              background: 'rgba(37, 99, 235, 0.1)',
+              border: '1px solid rgba(37, 99, 235, 0.2)',
+              borderRadius: 6,
+              p: { xs: 1, sm: 1.5 },
+              '&:hover': {
+                background: 'rgba(37, 99, 235, 0.2)',
+              }
             }}
           >
-            Новый заказ
-          </Typography>
-          <Typography 
-            variant="subtitle1" 
-            sx={{ 
-              color: 'grey.600',
-              fontWeight: 500,
-              fontSize: '1.1rem',
-              mt: 0.5
-            }}
-          >
-            Шаг {activeStep + 1} из {steps.length}
-          </Typography>
+            <ArrowBack sx={{ 
+              color: '#2563eb',
+              fontSize: { xs: 20, sm: 24 }
+            }} />
+          </IconButton>
+          
+          <Box sx={{ position: 'relative' }}>
+            <Typography 
+              variant="h4"
+              sx={{ 
+                fontWeight: 700, 
+                color: '#1e293b',
+                fontSize: { xs: '1.5rem', sm: '2.125rem' }
+              }}
+            >
+              Новый заказ
+            </Typography>
+            <Typography 
+              variant="subtitle1" 
+              sx={{ 
+                color: 'grey.600',
+                fontWeight: 500,
+                fontSize: { xs: '0.9rem', sm: '1.1rem' },
+                mt: 0.5
+              }}
+            >
+              Шаг {activeStep + 1} из {steps.length}
+            </Typography>
+          </Box>
         </Box>
       </Box>
 
-      {/* Stepper */}
+      {/* Мобильный Stepper */}
       <Card 
         sx={{ 
-          mb: 6,
+          mb: { xs: 4, sm: 6 },
           background: '#ffffff',
           border: '1px solid #e2e8f0',
-          borderRadius: 8,
+          borderRadius: { xs: 6, sm: 8 },
           position: 'relative',
           '&::before': {
             content: '""',
@@ -852,34 +864,18 @@ const CreateOrderPage: React.FC = () => {
           }
         }}
       >
-        <CardContent sx={{ py: 4 }}>
+        <CardContent sx={{ py: { xs: 3, sm: 4 } }}>
           <Stepper 
             activeStep={activeStep} 
-            alternativeLabel
+            alternativeLabel={window.innerWidth >= 600} // alternativeLabel только на больших экранах
+            orientation={window.innerWidth < 600 ? "horizontal" : "horizontal"}
             sx={{
-              '& .MuiStepConnector-root': {
-                top: 22,
-                left: 'calc(-50% + 16px)',
-                right: 'calc(50% + 16px)',
-                '& .MuiStepConnector-line': {
-                  borderColor: 'rgba(99, 102, 241, 0.2)',
-                  borderTopWidth: 3,
-                  borderRadius: 2,
-                }
-              },
-              '& .MuiStepConnector-active .MuiStepConnector-line': {
-                background: 'linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%)',
-                border: 'none',
-                height: 3,
-              },
-              '& .MuiStepConnector-completed .MuiStepConnector-line': {
-                background: 'linear-gradient(90deg, #10b981 0%, #34d399 100%)',
-                border: 'none',
-                height: 3,
-              },
+              // Мобильные стили
               '& .MuiStepLabel-label': {
                 fontWeight: 600,
-                fontSize: '1rem',
+                fontSize: { xs: '0.8rem', sm: '1rem' },
+                lineHeight: 1.2,
+                display: { xs: 'none', sm: 'block' }, // Скрываем текст на мобильных
                 '&.Mui-active': {
                   color: '#6366f1',
                   fontWeight: 700,
@@ -888,6 +884,27 @@ const CreateOrderPage: React.FC = () => {
                   color: '#059669',
                   fontWeight: 600,
                 }
+              },
+              // Коннекторы между шагами
+              '& .MuiStepConnector-root': {
+                top: { xs: 16, sm: 22 },
+                left: { xs: 'calc(-50% + 12px)', sm: 'calc(-50% + 16px)' },
+                right: { xs: 'calc(50% + 12px)', sm: 'calc(50% + 16px)' },
+                '& .MuiStepConnector-line': {
+                  borderColor: 'rgba(99, 102, 241, 0.2)',
+                  borderTopWidth: { xs: 2, sm: 3 },
+                  borderRadius: 2,
+                }
+              },
+              '& .MuiStepConnector-active .MuiStepConnector-line': {
+                background: 'linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%)',
+                border: 'none',
+                height: { xs: 2, sm: 3 },
+              },
+              '& .MuiStepConnector-completed .MuiStepConnector-line': {
+                background: 'linear-gradient(90deg, #10b981 0%, #34d399 100%)',
+                border: 'none',
+                height: { xs: 2, sm: 3 },
               }
             }}
           >
@@ -897,13 +914,13 @@ const CreateOrderPage: React.FC = () => {
                   StepIconComponent={({ active, completed }) => (
                     <Box
                       sx={{
-                        width: 44,
-                        height: 44,
+                        width: { xs: 32, sm: 44 },
+                        height: { xs: 32, sm: 44 },
                         borderRadius: '50%',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '1.1rem',
+                        fontSize: { xs: '0.9rem', sm: '1.1rem' },
                         fontWeight: 700,
                         background: completed 
                           ? 'linear-gradient(135deg, #10b981 0%, #34d399 100%)'
@@ -928,17 +945,20 @@ const CreateOrderPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Content */}
+      {/* Мобильный Content */}
       <Card 
         sx={{
           background: 'rgba(255, 255, 255, 0.7)',
           backdropFilter: 'blur(20px)',
           border: '1px solid rgba(99, 102, 241, 0.15)',
-          borderRadius: 6,
+          borderRadius: { xs: 4, sm: 6 },
           boxShadow: '0 8px 32px rgba(99, 102, 241, 0.1)',
         }}
       >
-        <CardContent sx={{ minHeight: 500, p: 4 }}>
+        <CardContent sx={{ 
+          minHeight: { xs: 400, sm: 500 }, 
+          p: { xs: 2, sm: 4 } 
+        }}>
           {renderStepContent(activeStep)}
           
           {error && (
@@ -946,10 +966,11 @@ const CreateOrderPage: React.FC = () => {
               severity="error" 
               sx={{ 
                 mt: 3,
-                borderRadius: 3,
+                borderRadius: { xs: 2, sm: 3 },
                 background: 'rgba(239, 68, 68, 0.1)',
                 border: '1px solid rgba(239, 68, 68, 0.2)',
                 backdropFilter: 'blur(10px)',
+                fontSize: { xs: '0.85rem', sm: '1rem' },
                 '& .MuiAlert-message': {
                   fontWeight: 500,
                 }
@@ -959,16 +980,20 @@ const CreateOrderPage: React.FC = () => {
             </Alert>
           )}
           
-          {/* Navigation */}
+          {/* Мобильная навигация */}
           <Box 
             display="flex" 
+            flexDirection={{ xs: 'column', sm: 'row' }}
             justifyContent="space-between" 
-            mt={6}
+            alignItems={{ xs: 'stretch', sm: 'center' }}
+            mt={{ xs: 4, sm: 6 }}
+            gap={{ xs: 2, sm: 0 }}
             sx={{
               pt: 3,
               borderTop: '1px solid rgba(99, 102, 241, 0.1)',
             }}
           >
+            {/* Кнопка "Назад" */}
             <Button
               disabled={activeStep === 0}
               onClick={handleBack}
@@ -976,13 +1001,15 @@ const CreateOrderPage: React.FC = () => {
               size="large"
               sx={{
                 borderRadius: 4,
-                px: 3,
-                py: 1.5,
+                px: { xs: 2, sm: 3 },
+                py: { xs: 1.2, sm: 1.5 },
                 fontWeight: 600,
                 textTransform: 'none',
+                fontSize: { xs: '0.9rem', sm: '1rem' },
                 color: '#2563eb',
                 border: '1px solid rgba(37, 99, 235, 0.3)',
                 background: 'rgba(37, 99, 235, 0.05)',
+                order: { xs: 2, sm: 1 }, // На мобильных вторая кнопка
                 '&:hover': {
                   background: 'rgba(37, 99, 235, 0.1)',
                   borderColor: '#2563eb',
@@ -998,7 +1025,13 @@ const CreateOrderPage: React.FC = () => {
               Назад
             </Button>
             
-            <Box display="flex" gap={2}>
+            {/* Основные кнопки */}
+            <Box 
+              display="flex" 
+              gap={{ xs: 2, sm: 2 }}
+              order={{ xs: 1, sm: 2 }} // На мобильных первые
+              width={{ xs: '100%', sm: 'auto' }}
+            >
               {activeStep < steps.length - 1 ? (
                 <Button
                   variant="contained"
@@ -1008,13 +1041,14 @@ const CreateOrderPage: React.FC = () => {
                   size="large"
                   sx={{
                     borderRadius: 4,
-                    px: 4,
-                    py: 1.5,
-                    fontSize: '1rem',
+                    px: { xs: 3, sm: 4 },
+                    py: { xs: 1.2, sm: 1.5 },
+                    fontSize: { xs: '0.9rem', sm: '1rem' },
                     fontWeight: 700,
                     textTransform: 'none',
                     background: '#2563eb',
                     boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+                    flex: { xs: 1, sm: 'none' }, // На мобильных растягиваем
                     '&:hover': {
                       background: '#1d4ed8',
                       boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
@@ -1037,9 +1071,9 @@ const CreateOrderPage: React.FC = () => {
                   size="large"
                   sx={{
                     borderRadius: 4,
-                    px: 5,
-                    py: 2,
-                    fontSize: '1.1rem',
+                    px: { xs: 3, sm: 5 },
+                    py: { xs: 1.5, sm: 2 },
+                    fontSize: { xs: '1rem', sm: '1.1rem' },
                     fontWeight: 700,
                     textTransform: 'none',
                     background: loading 
@@ -1048,6 +1082,7 @@ const CreateOrderPage: React.FC = () => {
                     boxShadow: loading 
                       ? 'none'
                       : '0 4px 12px rgba(16, 185, 129, 0.3)',
+                    flex: { xs: 1, sm: 'none' }, // На мобильных растягиваем
                     '&:hover': !loading ? {
                       background: '#059669',
                       boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',

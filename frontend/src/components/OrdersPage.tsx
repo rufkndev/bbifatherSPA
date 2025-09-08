@@ -222,13 +222,42 @@ const OrdersPage: React.FC = () => {
     return <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh"><CircularProgress size={60} /></Box>;
   }
 
-  // Форма входа для студента
+  // Форма входа для студента - адаптированная под мобильную версию
   if (!currentUser) {
     return (
-      <Box sx={{ maxWidth: 500, mx: 'auto', px: 3, py: 8, textAlign: 'center' }}>
-         <Card sx={{ p: 4, borderRadius: 4, boxShadow: 3 }}>
-           <Typography variant="h4" sx={{ fontWeight: 700, mb: 2 }}>Мои заказы</Typography>
-           <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>Введите ваш Telegram никнейм.</Typography>
+      <Box sx={{ 
+        maxWidth: { xs: '100%', sm: 500 }, 
+        mx: 'auto', 
+        px: { xs: 2, sm: 3 }, 
+        py: { xs: 4, sm: 8 }, 
+        textAlign: 'center' 
+      }}>
+         <Card sx={{ 
+           p: { xs: 3, sm: 4 }, 
+           borderRadius: { xs: 3, sm: 4 }, 
+           boxShadow: 3,
+           border: '1px solid #e2e8f0',
+         }}>
+           <Typography 
+             variant="h4" 
+             sx={{ 
+               fontWeight: 700, 
+               mb: 2,
+               fontSize: { xs: '1.5rem', sm: '2.125rem' }
+             }}
+           >
+             Мои заказы
+           </Typography>
+           <Typography 
+             variant="body1" 
+             color="text.secondary" 
+             sx={{ 
+               mb: 4,
+               fontSize: { xs: '0.9rem', sm: '1rem' }
+             }}
+           >
+             Введите ваш Telegram никнейм.
+           </Typography>
            <TextField
               fullWidth
               label="Ваш Telegram никнейм"
@@ -236,36 +265,127 @@ const OrdersPage: React.FC = () => {
               onChange={(e) => setTelegramInput(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
               placeholder="@username"
-              sx={{ mb: 2 }}
+              sx={{ 
+                mb: 2,
+                '& .MuiInputBase-root': {
+                  height: { xs: 48, sm: 56 },
+                },
+                '& .MuiInputLabel-root': {
+                  fontSize: { xs: '0.9rem', sm: '1rem' }
+                }
+              }}
             />
-            <Button fullWidth variant="contained" size="large" onClick={handleLogin} startIcon={<SearchIcon />}>Найти</Button>
-            <Button fullWidth variant="text" onClick={handleAdminLogin} sx={{ mt: 2, color: 'text.secondary' }}>Войти как администратор</Button>
+            <Button 
+              fullWidth 
+              variant="contained" 
+              size="large" 
+              onClick={handleLogin} 
+              startIcon={<SearchIcon />}
+              sx={{
+                height: { xs: 48, sm: 56 },
+                fontSize: { xs: '0.9rem', sm: '1rem' },
+                fontWeight: 600
+              }}
+            >
+              Найти
+            </Button>
+            <Button 
+              fullWidth 
+              variant="text" 
+              onClick={handleAdminLogin} 
+              sx={{ 
+                mt: 2, 
+                color: 'text.secondary',
+                height: { xs: 40, sm: 48 },
+                fontSize: { xs: '0.85rem', sm: '1rem' }
+              }}
+            >
+              Войти как администратор
+            </Button>
          </Card>
       </Box>
     );
   }
 
   return (
-    <Box sx={{ maxWidth: 1400, mx: 'auto', px: 3, py: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p:3, mb: 4, background: '#fff', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+    <Box sx={{ maxWidth: 1400, mx: 'auto', px: { xs: 1, sm: 3 }, py: { xs: 2, sm: 4 } }}>
+      {/* Мобильный header */}
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: { xs: 'column', sm: 'row' },
+        justifyContent: 'space-between', 
+        alignItems: { xs: 'stretch', sm: 'center' }, 
+        p: { xs: 2, sm: 3 }, 
+        mb: { xs: 2, sm: 4 }, 
+        background: '#fff', 
+        borderRadius: 4, 
+        border: '1px solid #e2e8f0' 
+      }}>
         <div>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
+          <Typography 
+            variant="h5" 
+            component="h1" 
+            sx={{ 
+              fontWeight: 700,
+              fontSize: { xs: '1.4rem', sm: '2.125rem' }
+            }}
+          >
             {isAdminView ? 'Все заказы' : `Заказы ${currentUser}`}
           </Typography>
-          <Typography variant="subtitle1" sx={{ color: 'grey.600' }}>
+          <Typography 
+            variant="subtitle1" 
+            sx={{ 
+              color: 'grey.600',
+              fontSize: { xs: '0.9rem', sm: '1rem' },
+              mb: { xs: 2, sm: 0 }
+            }}
+          >
             {isAdminView ? 'Панель администратора' : 'Отслеживайте статус ваших работ'}
           </Typography>
         </div>
-        <Button variant="outlined" onClick={handleLogout} startIcon={<LogoutIcon />}>Выйти</Button>
+        <Button 
+          variant="outlined" 
+          onClick={handleLogout} 
+          startIcon={<LogoutIcon />}
+          size={window.innerWidth < 600 ? 'medium' : 'large'}
+          sx={{
+            alignSelf: { xs: 'flex-start', sm: 'center' },
+          }}
+        >
+          Выйти
+        </Button>
       </Box>
 
-      <Grid container spacing={2} mb={4}>
+      {/* Адаптивная статистика */}
+      <Grid container spacing={{ xs: 1, sm: 2 }} mb={{ xs: 3, sm: 4 }}>
          {statsData.map(({ status, config, count }) => (
             <Grid item xs={6} sm={4} md={2} key={status}>
-              <Card sx={{ textAlign: 'center', p: 1, border: '1px solid #e2e8f0' }}>
-                <Typography sx={{ fontSize: '1.5rem' }}>{config.icon}</Typography>
-                <Typography variant="h5" sx={{ fontWeight: 700 }}>{count}</Typography>
-                <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>{config.label}</Typography>
+              <Card sx={{ 
+                textAlign: 'center', 
+                p: { xs: 1, sm: 1.5 }, 
+                border: '1px solid #e2e8f0',
+                borderRadius: 2,
+              }}>
+                <Typography sx={{ fontSize: { xs: '1.2rem', sm: '1.5rem' } }}>{config.icon}</Typography>
+                <Typography 
+                  variant="h5" 
+                  sx={{ 
+                    fontWeight: 700,
+                    fontSize: { xs: '1.3rem', sm: '2.125rem' }
+                  }}
+                >
+                  {count}
+                </Typography>
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    color: 'text.secondary', 
+                    fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                    lineHeight: 1.2
+                  }}
+                >
+                  {config.label}
+                </Typography>
               </Card>
             </Grid>
           ))}
@@ -280,48 +400,143 @@ const OrdersPage: React.FC = () => {
           </CardContent>
         </Card>
       ) : (
-        <Grid container spacing={3}>
+        <Grid container spacing={{ xs: 2, sm: 3 }}>
           {orders.map((order) => {
             const statusInfo = statusConfig[order.status as OrderStatus];
             const deadlineStatus = getDeadlineStatus(order.deadline);
             
             return (
               <Grid item xs={12} md={6} lg={4} key={order.id}>
-                <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 4, boxShadow: 1 }}>
-                  <CardContent sx={{ flexGrow: 1, p: 3 }}>
-                    <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
-                      <Typography variant="h6" sx={{ fontWeight: 700 }}>{order.title}</Typography>
-                      <Chip label={`${statusInfo.icon} ${statusInfo.label}`} size="small" color={statusInfo.color} sx={{ fontWeight: 600 }} />
+                <Card sx={{ 
+                  height: '100%', 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  borderRadius: { xs: 3, sm: 4 }, 
+                  boxShadow: 1,
+                  border: '1px solid #e2e8f0',
+                }}>
+                  <CardContent sx={{ 
+                    flexGrow: 1, 
+                    p: { xs: 2, sm: 3 },
+                  }}>
+                    {/* Мобильная версия заголовка */}
+                    <Box 
+                      display="flex" 
+                      flexDirection={{ xs: 'column', sm: 'row' }}
+                      justifyContent="space-between" 
+                      alignItems={{ xs: 'start', sm: 'start' }} 
+                      mb={2}
+                      gap={1}
+                    >
+                      <Typography 
+                        variant="h6" 
+                        sx={{ 
+                          fontWeight: 700,
+                          fontSize: { xs: '1rem', sm: '1.25rem' },
+                          lineHeight: 1.2,
+                          order: { xs: 2, sm: 1 }
+                        }}
+                      >
+                        {order.title}
+                      </Typography>
+                      <Chip 
+                        label={`${statusInfo.icon} ${statusInfo.label}`} 
+                        size="small" 
+                        color={statusInfo.color} 
+                        sx={{ 
+                          fontWeight: 600,
+                          fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                          height: { xs: 24, sm: 32 },
+                          order: { xs: 1, sm: 2 },
+                          alignSelf: { xs: 'flex-start', sm: 'flex-start' }
+                        }} 
+                      />
                     </Box>
 
-                    <Box mb={3}>
-                       <LinearProgress variant="determinate" value={statusInfo.progress} color={statusInfo.color} />
+                    {/* Прогресс-бар */}
+                    <Box mb={{ xs: 2, sm: 3 }}>
+                       <LinearProgress 
+                         variant="determinate" 
+                         value={statusInfo.progress} 
+                         color={statusInfo.color} 
+                         sx={{
+                           height: { xs: 6, sm: 4 },
+                           borderRadius: 3,
+                         }}
+                       />
                     </Box>
 
+                    {/* Информация о заказе */}
                     <Stack spacing={1} mb={2}>
                       <Box display="flex" alignItems="center" gap={1}>
-                        <CalendarToday sx={{ fontSize: 16 }} />
-                        <Typography variant="body2">{format(new Date(order.deadline), 'dd MMM yyyy', { locale: ru })} ({deadlineStatus.text})</Typography>
+                        <CalendarToday sx={{ fontSize: { xs: 14, sm: 16 } }} />
+                        <Typography 
+                          variant="body2"
+                          sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
+                        >
+                          {format(new Date(order.deadline), 'dd MMM yyyy', { locale: ru })} ({deadlineStatus.text})
+                        </Typography>
                       </Box>
                       {isAdminView && order.student && (
-                        <Typography variant="body2"><strong>Студент:</strong> {order.student.name} (@{order.student.telegram})</Typography>
+                        <Typography 
+                          variant="body2"
+                          sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
+                        >
+                          <strong>Студент:</strong> {order.student.name} (@{order.student.telegram})
+                        </Typography>
                       )}
                     </Stack>
                   </CardContent>
-                  <CardActions sx={{ p: 2, flexDirection: 'column', alignItems: 'stretch', gap: 2 }}>
+                  <CardActions sx={{ 
+                    p: { xs: 1.5, sm: 2 }, 
+                    flexDirection: 'column', 
+                    alignItems: 'stretch', 
+                    gap: { xs: 1.5, sm: 2 } 
+                  }}>
                      {/* Блок для статуса "ожидание оплаты" */}
                      {order.status === OrderStatus.WAITING_PAYMENT && !isAdminView && (
-                       <Box sx={{ p: 2, bgcolor: '#fff3cd', borderRadius: 2, border: '1px solid #ffeaa7' }}>
-                         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#856404' }}>
+                       <Box sx={{ 
+                         p: { xs: 1.5, sm: 2 }, 
+                         bgcolor: '#fff3cd', 
+                         borderRadius: { xs: 1.5, sm: 2 }, 
+                         border: '1px solid #ffeaa7' 
+                       }}>
+                         <Typography 
+                           variant="subtitle2" 
+                           sx={{ 
+                             fontWeight: 600, 
+                             mb: 1, 
+                             color: '#856404',
+                             fontSize: { xs: '0.85rem', sm: '0.875rem' }
+                           }}
+                         >
                            💳 Реквизиты для оплаты
                          </Typography>
-                         <Typography variant="body2" sx={{ mb: 1 }}>
+                         <Typography 
+                           variant="body2" 
+                           sx={{ 
+                             mb: 1,
+                             fontSize: { xs: '0.8rem', sm: '0.875rem' }
+                           }}
+                         >
                            <strong>Карта Тбанк:</strong> +7 962 120 63 60
                          </Typography>
-                         <Typography variant="body2" sx={{ mb: 1 }}>
+                         <Typography 
+                           variant="body2" 
+                           sx={{ 
+                             mb: 1,
+                             fontSize: { xs: '0.8rem', sm: '0.875rem' }
+                           }}
+                         >
                            <strong>Получатель:</strong> Таранов А. И.
                          </Typography>
-                         <Typography variant="body2" sx={{ mb: 2 }}>
+                         <Typography 
+                           variant="body2" 
+                           sx={{ 
+                             mb: 2,
+                             fontSize: { xs: '0.8rem', sm: '0.875rem' }
+                           }}
+                         >
                            <strong>Сумма:</strong> {order.actual_price || order.subject?.price} ₽
                          </Typography>
                          
@@ -331,13 +546,24 @@ const OrdersPage: React.FC = () => {
                              variant="contained"
                              color="success"
                              onClick={() => handlePaymentNotification(order.id!)}
-                             sx={{ fontWeight: 600 }}
+                             sx={{ 
+                               fontWeight: 600,
+                               width: { xs: '100%', sm: 'auto' },
+                               py: { xs: 1, sm: 0.5 },
+                             }}
                            >
                              ✅ Я оплатил
                            </Button>
                          )}
                          {paymentNotifications.has(order.id!) && (
-                           <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>
+                           <Typography 
+                             variant="body2" 
+                             color="success.main" 
+                             sx={{ 
+                               fontWeight: 600,
+                               fontSize: { xs: '0.8rem', sm: '0.875rem' }
+                             }}
+                           >
                              ✅ Уведомление об оплате отправлено
                            </Typography>
                          )}
@@ -346,8 +572,21 @@ const OrdersPage: React.FC = () => {
 
                      {/* Блок для статуса "выполнено" */}
                      {order.status === OrderStatus.COMPLETED && !isAdminView && (
-                       <Box sx={{ p: 2, bgcolor: '#d4edda', borderRadius: 2, border: '1px solid #c3e6cb' }}>
-                         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#155724' }}>
+                       <Box sx={{ 
+                         p: { xs: 1.5, sm: 2 }, 
+                         bgcolor: '#d4edda', 
+                         borderRadius: { xs: 1.5, sm: 2 }, 
+                         border: '1px solid #c3e6cb' 
+                       }}>
+                         <Typography 
+                           variant="subtitle2" 
+                           sx={{ 
+                             fontWeight: 600, 
+                             mb: 1, 
+                             color: '#155724',
+                             fontSize: { xs: '0.85rem', sm: '0.875rem' }
+                           }}
+                         >
                            ✅ Работа выполнена
                          </Typography>
                          <Button
@@ -355,20 +594,52 @@ const OrdersPage: React.FC = () => {
                            variant="outlined"
                            color="warning"
                            onClick={() => handleRequestRevision(order)}
-                           sx={{ fontWeight: 600 }}
+                           sx={{ 
+                             fontWeight: 600,
+                             width: { xs: '100%', sm: 'auto' },
+                             py: { xs: 1, sm: 0.5 },
+                           }}
                          >
                            🔄 Нужны исправления
                          </Button>
                        </Box>
                      )}
 
-                     <Box display="flex" justifyContent="space-between" alignItems="center">
+                     {/* Нижняя панель карточки */}
+                     <Box 
+                       display="flex" 
+                       flexDirection={{ xs: 'column', sm: 'row' }}
+                       justifyContent="space-between" 
+                       alignItems={{ xs: 'stretch', sm: 'center' }}
+                       gap={{ xs: 1, sm: 0 }}
+                     >
                        <Box display="flex" gap={1}>
                          {order.files && order.files.length > 0 &&
-                           <Button size="small" variant="contained" onClick={() => handleDownloadAllFiles(order.id!)}>Скачать</Button>
+                           <Button 
+                             size="small" 
+                             variant="contained" 
+                             onClick={() => handleDownloadAllFiles(order.id!)}
+                             sx={{
+                               py: { xs: 1, sm: 0.5 },
+                               fontSize: { xs: '0.8rem', sm: '0.875rem' }
+                             }}
+                           >
+                             Скачать
+                           </Button>
                          }
                        </Box>
-                       <Typography variant="h6" color="primary" sx={{ fontWeight: 600 }}>#{order.id}</Typography>
+                       <Typography 
+                         variant="h6" 
+                         color="primary" 
+                         sx={{ 
+                           fontWeight: 600,
+                           fontSize: { xs: '1rem', sm: '1.25rem' },
+                           textAlign: { xs: 'center', sm: 'right' },
+                           mt: { xs: 1, sm: 0 }
+                         }}
+                       >
+                         #{order.id}
+                       </Typography>
                      </Box>
                   </CardActions>
                 </Card>

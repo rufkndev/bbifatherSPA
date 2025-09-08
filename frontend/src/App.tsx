@@ -41,8 +41,11 @@ function App() {
         flexGrow: 1, 
         minHeight: '100vh',
         background: '#f8fafc',
+        // Убираем отступы для мобильной версии
+        pb: { xs: 8, sm: 2 }, // Добавляем отступ снизу на мобильных для bottom navigation
       }}
     >
+      {/* Мобильная версия - компактный header */}
       <AppBar 
         position="fixed" 
         elevation={0}
@@ -50,26 +53,30 @@ function App() {
           background: '#ffffff',
           borderBottom: '1px solid #e2e8f0',
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+          // Компактный для мобильных
+          '& .MuiToolbar-root': {
+            minHeight: { xs: 56, sm: 64 },
+          }
         }}
       >
-        <Container maxWidth="xl">
-          <Toolbar sx={{ py: 1 }}>
+        <Container maxWidth="xl" disableGutters sx={{ px: { xs: 2, sm: 3 } }}>
+          <Toolbar sx={{ py: { xs: 0.5, sm: 1 }, minHeight: 'inherit !important' }}>
             <Box 
               sx={{ 
                 display: 'flex', 
                 alignItems: 'center', 
-                mr: 3,
+                mr: { xs: 2, sm: 3 },
                 background: '#2563eb',
                 borderRadius: '8px',
-                p: 1.5,
+                p: { xs: 1, sm: 1.5 },
                 color: 'white'
               }}
             >
-              <School sx={{ fontSize: 24 }} />
+              <School sx={{ fontSize: { xs: 20, sm: 24 } }} />
             </Box>
             
             <Typography 
-              variant="h5" 
+              variant="h6"
               component={Link}
               to="/"
               sx={{ 
@@ -78,6 +85,7 @@ function App() {
                 textDecoration: 'none',
                 color: '#1e293b',
                 transition: 'all 0.2s ease',
+                fontSize: { xs: '1.1rem', sm: '1.25rem' },
                 '&:hover': { 
                   color: '#2563eb',
                 }
@@ -86,78 +94,94 @@ function App() {
               BBI Father
             </Typography>
             
+            {/* Скрываем chip на мобильных для экономии места */}
             <Chip 
               label={getPageTitle()}
               sx={{ 
-                mr: 3,
+                mr: { xs: 1, sm: 3 },
                 background: 'rgba(37, 99, 235, 0.1)',
                 color: '#2563eb',
                 fontWeight: 600,
-                fontSize: '0.85rem',
+                fontSize: { xs: '0.75rem', sm: '0.85rem' },
                 border: '1px solid rgba(37, 99, 235, 0.2)',
+                display: { xs: 'none', sm: 'flex' }, // Скрываем на мобильных
                 '&:hover': {
                   background: 'rgba(37, 99, 235, 0.2)',
                 }
               }}
             />
-            
-            <Box display="flex" gap={1}>
-              <IconButton 
-                component={Link} 
-                to="/"
-                sx={{ 
-                  borderRadius: '4px',
-                  p: 1.5,
-                  background: location.pathname === '/' 
-                    ? '#2563eb' 
-                    : 'rgba(37, 99, 235, 0.1)',
-                  color: location.pathname === '/' ? 'white' : '#2563eb',
-                  border: '1px solid rgba(37, 99, 235, 0.2)',
-                  transition: 'all 0.2s ease',
-                  '&:hover': {
-                    background: location.pathname === '/' 
-                      ? '#1d4ed8'
-                      : 'rgba(37, 99, 235, 0.2)',
-                  }
-                }}
-              >
-                <Home />
-              </IconButton>
-              
-              <IconButton 
-                component={Link} 
-                to="/create"
-                sx={{ 
-                  borderRadius: '4px',
-                  p: 1.5,
-                  background: location.pathname === '/create' 
-                    ? '#2563eb' 
-                    : 'rgba(37, 99, 235, 0.1)',
-                  color: location.pathname === '/create' ? 'white' : '#2563eb',
-                  border: '1px solid rgba(37, 99, 235, 0.2)',
-                  transition: 'all 0.2s ease',
-                  '&:hover': {
-                    background: location.pathname === '/create' 
-                      ? '#1d4ed8'
-                      : 'rgba(37, 99, 235, 0.2)',
-                  }
-                }}
-              >
-                <Add />
-              </IconButton>
-            </Box>
           </Toolbar>
         </Container>
       </AppBar>
-      
-      <Box sx={{ pt: 10, minHeight: '100vh', px: 2 }}>
-        <Container maxWidth="xl" sx={{ py: 2 }}>
+
+      {/* Основной контент */}
+      <Box sx={{ 
+        pt: { xs: 7, sm: 10 }, 
+        minHeight: '100vh', 
+        px: { xs: 1, sm: 2 } 
+      }}>
+        <Container maxWidth="xl" sx={{ py: { xs: 1, sm: 2 } }}>
           <Routes>
             <Route path="/" element={<OrdersPage />} />
             <Route path="/create" element={<CreateOrderPage />} />
             <Route path="/admin" element={<AdminPage />} />
           </Routes>
         </Container>
+      </Box>
+
+      {/* Мобильная bottom navigation */}
+      <Box
+        sx={{
+          display: { xs: 'block', sm: 'none' },
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(10px)',
+          borderTop: '1px solid #e2e8f0',
+          py: 1,
+          px: 2,
+          zIndex: 1000,
+        }}
+      >
+        <Box display="flex" justifyContent="space-around" alignItems="center">
+          <IconButton 
+            component={Link} 
+            to="/"
+            size="large"
+            sx={{ 
+              borderRadius: '12px',
+              p: 2,
+              background: location.pathname === '/' 
+                ? 'rgba(37, 99, 235, 0.1)' 
+                : 'transparent',
+              color: location.pathname === '/' ? '#2563eb' : '#64748b',
+              border: location.pathname === '/' ? '1px solid rgba(37, 99, 235, 0.2)' : 'none',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <Home sx={{ fontSize: 28 }} />
+          </IconButton>
+          
+          <IconButton 
+            component={Link} 
+            to="/create"
+            size="large"
+            sx={{ 
+              borderRadius: '12px',
+              p: 2,
+              background: location.pathname === '/create' 
+                ? 'rgba(37, 99, 235, 0.1)' 
+                : 'transparent',
+              color: location.pathname === '/create' ? '#2563eb' : '#64748b',
+              border: location.pathname === '/create' ? '1px solid rgba(37, 99, 235, 0.2)' : 'none',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <Add sx={{ fontSize: 28 }} />
+          </IconButton>
+        </Box>
       </Box>
     </Box>
   );
