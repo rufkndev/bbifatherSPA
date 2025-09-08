@@ -9,8 +9,8 @@ import asyncio
 import logging
 from typing import Optional
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv
 
 # Загружаем переменные окружения
@@ -39,9 +39,6 @@ class BBIFatherBot:
 
     def setup_handlers(self):
         """Настройка обработчиков команд и сообщений"""
-        # КРИТИЧЕСКИ ВАЖНО: CallbackQueryHandler должен быть ПЕРВЫМ!
-        self.app.add_handler(CallbackQueryHandler(self.button_callback))
-        
         # Команды
         self.app.add_handler(CommandHandler("start", self.start_command))
         self.app.add_handler(CommandHandler("help", self.help_command))
@@ -49,7 +46,7 @@ class BBIFatherBot:
         self.app.add_handler(CommandHandler("support", self.support_command))
         self.app.add_handler(CommandHandler("download", self.download_command))
         
-        # Обработчик текстовых сообщений для тех поддержки (ДОЛЖЕН быть ПОСЛЕДНИМ!)
+        # Обработчик текстовых сообщений (включая кнопки меню)
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         
         # Дополнительное логирование
@@ -117,140 +114,30 @@ class BBIFatherBot:
         """Обработка команды /support"""
         await self.handle_support_request(update, context)
 
-    def get_main_keyboard(self, username: Optional[str] = None) -> InlineKeyboardMarkup:
+    def get_main_keyboard(self, username: Optional[str] = None) -> ReplyKeyboardMarkup:
         """Создание главной клавиатуры"""
         keyboard = [
             [
-                InlineKeyboardButton(
+                KeyboardButton(
                     "📱 Открыть приложение",
                     web_app=WebAppInfo(url=f"{WEB_APP_URL}?telegram={username or 'user'}")
                 )
             ],
             [
-                InlineKeyboardButton("💬 Техподдержка", callback_data="support"),
-                InlineKeyboardButton("📋 Правила", callback_data="rules")
+                KeyboardButton("💬 Техподдержка"),
+                KeyboardButton("📋 Правила")
             ],
             [
-                InlineKeyboardButton("ℹ️ Справка", callback_data="help"),
-                InlineKeyboardButton("📥 Скачать файлы", callback_data="download")
+                KeyboardButton("ℹ️ Справка"),
+                KeyboardButton("📥 Скачать файлы")
             ]
         ]
-        return InlineKeyboardMarkup(keyboard)
-
-    async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка нажатий на inline кнопки"""
-        # КРИТИЧЕСКАЯ ПРОВЕРКА: есть ли callback_query
-        if not update.callback_query:
-            logger.error("❌ CRITICAL: update.callback_query is None!")
-            return
-            
-        query = update.callback_query
-        user = update.effective_user
-        
-        logger.info(f"🔘 CALLBACK ПОЛУЧЕН! Кнопка: '{query.data}' от {user.username or user.first_name} (ID: {user.id})")
-        
-        # Сначала отвечаем на callback query - ОБЯЗАТЕЛЬНО!
-        try:
-            await query.answer()
-            logger.info(f"✅ Callback query answered для '{query.data}'")
-        except Exception as e:
-            logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА query.answer(): {e}")
-            # Пробуем повторно без параметров
-            try:
-                await query.answer()
-            except Exception as e2:
-                logger.error(f"❌ ПОВТОРНАЯ ОШИБКА query.answer(): {e2}")
-                return
-        
-        # Обработка callback'ов
-        try:
-            if query.data == "rules":
-                logger.info("📋 Обрабатываем кнопку 'Правила'")
-                await query.edit_message_text(
-                    "📋 <b>Правила BBI Father</b>\n\nЭто тестовое сообщение правил.\nКнопка работает!",
-                    parse_mode='HTML',
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")
-                    ]])
-                )
-            elif query.data == "support":
-                logger.info("💬 Обрабатываем кнопку 'Техподдержка'")
-                await query.edit_message_text(
-                    f"💬 <b>Техподдержка</b>\n\nСвяжитесь с админом: @{ADMIN_USERNAME}",
-                    parse_mode='HTML',
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton(f"✉️ Написать @{ADMIN_USERNAME}", url=f"https://t.me/{ADMIN_USERNAME}")
-                    ], [
-                        InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")
-                    ]])
-                )
-            elif query.data == "help":
-                logger.info("ℹ️ Обрабатываем кнопку 'Справка'")
-                await query.edit_message_text(
-                    "ℹ️ <b>Справка</b>\n\nЭто справочная информация.\nКнопка работает!",
-                    parse_mode='HTML',
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")
-                    ]])
-                )
-            elif query.data == "download":
-                logger.info("📥 Обрабатываем кнопку 'Скачать файлы'")
-                await query.edit_message_text(
-                    "📥 <b>Скачивание файлов</b>\n\n"
-                    "Для скачивания готовых файлов:\n"
-                    "1. Откройте веб-приложение\n"
-                    "2. Перейдите в раздел 'Мои заказы'\n"
-                    "3. Нажмите кнопку скачивания у нужного заказа\n\n"
-                    "Файлы также приходят в уведомлениях при готовности.",
-                    parse_mode='HTML',
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("📱 Открыть приложение", web_app=WebAppInfo(url=WEB_APP_URL)),
-                        InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")
-                    ]])
-                )
-            elif query.data == "back_to_menu":
-                logger.info("🔙 Возвращаемся в главное меню")
-                user = update.effective_user
-                welcome_text = f"""
-👋 Привет, {user.first_name}!
-
-Добро пожаловать в <b>BBI Father</b> - сервис для заказа практических работ!
-
-🎓 Здесь вы можете:
-• Заказать выполнение лабораторных работ
-• Отслеживать статус ваших заказов  
-• Получать готовые работы прямо в Telegram
-
-Выберите действие из меню ниже:
-                """.strip()
-                
-                keyboard = self.get_main_keyboard(user.username)
-                await query.edit_message_text(welcome_text, reply_markup=keyboard, parse_mode='HTML')
-            elif query.data.startswith("download_"):
-                logger.info(f"📥 Обрабатываем скачивание заказа")
-                order_id = query.data.split("_")[1]
-                await query.edit_message_text(
-                    f"📥 <b>Скачивание заказа #{order_id}</b>\n\n"
-                    "Скачивание файлов теперь доступно в веб-приложении.\n"
-                    "Откройте приложение и перейдите в раздел 'Мои заказы'.",
-                    parse_mode='HTML',
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("📱 Открыть приложение", web_app=WebAppInfo(url=WEB_APP_URL)),
-                        InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")
-                    ]])
-                )
-            else:
-                logger.warning(f"❓ Неизвестная кнопка: {query.data}")
-                await query.edit_message_text("❓ Неизвестная команда")
-                
-        except Exception as e:
-            logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА в button_callback: {e}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            try:
-                await query.edit_message_text("❌ Произошла ошибка. Попробуйте позже.")
-            except:
-                pass
+        return ReplyKeyboardMarkup(
+            keyboard, 
+            resize_keyboard=True, 
+            one_time_keyboard=False,
+            input_field_placeholder="Выберите действие из меню ниже"
+        )
 
     async def send_rules(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edit: bool = False):
         """Отправка правил пользования сервисом"""
@@ -287,22 +174,13 @@ class BBIFatherBot:
 Техподдержка работает ежедневно с 9:00 до 21:00 MSK
         """
         
-        back_keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
-        ])
+        keyboard = self.get_main_keyboard(update.effective_user.username)
         
-        if edit and update.callback_query:
-            await update.callback_query.edit_message_text(
-                rules_text,
-                reply_markup=back_keyboard,
-                parse_mode='HTML'
-            )
-        else:
-            await update.message.reply_text(
-                rules_text,
-                reply_markup=back_keyboard,
-                parse_mode='HTML'
-            )
+        await update.message.reply_text(
+            rules_text,
+            reply_markup=keyboard,
+            parse_mode='HTML'
+        )
 
     async def handle_support_request(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edit: bool = False):
         """Обработка запроса в техподдержку - перенаправление к админу"""
@@ -326,40 +204,42 @@ class BBIFatherBot:
 Нажмите кнопку ниже для связи с администратором 👇
         """
         
-        keyboard = [
-            [InlineKeyboardButton(
-                f"✉️ Написать @{ADMIN_USERNAME}",
-                url=f"https://t.me/{ADMIN_USERNAME}"
-            )],
-            [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
-        ]
-        support_keyboard = InlineKeyboardMarkup(keyboard)
+        support_text += f"\n\n📞 <b>Контакт:</b> @{ADMIN_USERNAME}"
         
-        if edit and update.callback_query:
-            await update.callback_query.edit_message_text(
-                support_text,
-                reply_markup=support_keyboard,
-                parse_mode='HTML'
-            )
-        else:
-            await update.message.reply_text(
-                support_text,
-                reply_markup=support_keyboard,
-                parse_mode='HTML'
-            )
+        keyboard = self.get_main_keyboard(user.username)
+        
+        await update.message.reply_text(
+            support_text,
+            reply_markup=keyboard,
+            parse_mode='HTML'
+        )
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка текстовых сообщений"""
+        """Обработка текстовых сообщений и кнопок меню"""
         user = update.effective_user
+        message_text = update.message.text
+        
+        logger.info(f"📨 Получено сообщение: '{message_text}' от {user.username or user.first_name}")
         
         # Если пользователь ждет ответа поддержки
         if context.user_data.get('waiting_for_support'):
             await self.forward_to_support(update, context)
             context.user_data['waiting_for_support'] = False
+            return
+        
+        # Обработка кнопок меню
+        if message_text == "📋 Правила":
+            await self.send_rules(update, context)
+        elif message_text == "💬 Техподдержка":
+            await self.handle_support_request(update, context)
+        elif message_text == "ℹ️ Справка":
+            await self.send_user_guide(update, context)
+        elif message_text == "📥 Скачать файлы":
+            await self.download_command(update, context)
         else:
-            # Обычное сообщение - показываем главное меню
+            # Неизвестное сообщение - показываем главное меню
             await update.message.reply_text(
-                "Используйте кнопки ниже для навигации:",
+                "Выберите одну из кнопок меню ниже:",
                 reply_markup=self.get_main_keyboard(user.username)
             )
 
@@ -462,40 +342,29 @@ class BBIFatherBot:
 Свяжитесь с администратором через "Техподдержка"
         """
         
-        back_keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
-        ])
+        keyboard = self.get_main_keyboard(update.effective_user.username)
         
-        if edit and update.callback_query:
-            await update.callback_query.edit_message_text(
-                guide_text,
-                reply_markup=back_keyboard,
-                parse_mode='HTML'
-            )
-        else:
-            await update.message.reply_text(
-                guide_text,
-                reply_markup=back_keyboard,
-                parse_mode='HTML'
-            )
+        await update.message.reply_text(
+            guide_text,
+            reply_markup=keyboard,
+            parse_mode='HTML'
+        )
 
 
     async def download_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Команда /download для скачивания файлов"""
+        keyboard = self.get_main_keyboard(update.effective_user.username)
+        
         await update.message.reply_text(
             "📥 <b>Скачивание файлов</b>\n\n"
             "Для скачивания готовых файлов:\n"
-            "1. Откройте веб-приложение\n" 
+            "1. Нажмите кнопку '📱 Открыть приложение' ниже\n" 
             "2. Перейдите в раздел 'Мои заказы'\n"
             "3. Нажмите кнопку скачивания у нужного заказа\n\n"
             "Файлы также приходят в уведомлениях при готовности.",
             parse_mode='HTML',
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("📱 Открыть приложение", web_app=WebAppInfo(url=WEB_APP_URL))
-            ]])
+            reply_markup=keyboard
         )
-
-
 
     def run(self):
         """Запуск бота"""
