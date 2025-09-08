@@ -176,7 +176,7 @@ export const useTelegramWebApp = () => {
       webApp.showAlert(message, callback);
     } else {
       // Fallback для обычного браузера
-      alert(message);
+      window.alert(message);
       callback?.();
     }
   };
@@ -186,7 +186,7 @@ export const useTelegramWebApp = () => {
       webApp.showConfirm(message, callback);
     } else {
       // Fallback для обычного браузера
-      const confirmed = confirm(message);
+      const confirmed = window.confirm(message);
       callback?.(confirmed);
     }
   };
