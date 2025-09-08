@@ -250,15 +250,16 @@ async def send_status_notification_to_user(order: dict, new_status: str):
 def read_root():
     return {"message": "Student Orders API is running"}
 
-@app.post("/api/save-chat-id")
-async def save_chat_id(request: Request):
-    """Сохранение chat_id пользователя для отправки уведомлений"""
+async def save_chat_id_handler(request: Request):
+    """Общий обработчик для сохранения chat_id пользователя"""
     try:
         data = await request.json()
         telegram_username = data.get('telegram_username', '').lstrip('@')
         chat_id = data.get('chat_id')
         first_name = data.get('first_name', '')
         last_name = data.get('last_name', '')
+        
+        print(f"💾 Получен запрос на сохранение chat_id: @{telegram_username} -> {chat_id}")
         
         if not telegram_username or not chat_id:
             raise HTTPException(status_code=400, detail="Не указан telegram_username или chat_id")
@@ -290,6 +291,16 @@ async def save_chat_id(request: Request):
     except Exception as e:
         print(f"❌ Ошибка сохранения chat_id: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка сохранения: {str(e)}")
+
+@app.post("/api/save-chat-id")
+async def save_chat_id_api(request: Request):
+    """Сохранение chat_id пользователя для отправки уведомлений (с префиксом /api/)"""
+    return await save_chat_id_handler(request)
+
+@app.post("/save-chat-id")
+async def save_chat_id_direct(request: Request):
+    """Сохранение chat_id пользователя для отправки уведомлений (без префикса /api/)"""
+    return await save_chat_id_handler(request)
 
 # Students endpoints
 @app.get("/api/students")
