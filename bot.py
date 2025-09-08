@@ -130,7 +130,7 @@ class BBIFatherBot:
                 )
             ],
             [
-                InlineKeyboardButton("💬 Техподдержка", callback_data="support"),
+                InlineKeyboardButton("💬 Техподдержка", callback_data="/support"),
                 InlineKeyboardButton("📋 Правила", callback_data="rules")
             ],
             [
