@@ -272,8 +272,7 @@ async def save_chat_id_handler(request: Request):
             student_id = student_response.data[0]['id']
             supabase.table('students').update({
                 'chat_id': str(chat_id),
-                'name': first_name + (' ' + last_name if last_name else ''),
-                'updated_at': datetime.now().isoformat()
+                'name': first_name + (' ' + last_name if last_name else '')
             }).eq('id', student_id).execute()
             print(f"✅ Chat ID обновлен для студента @{telegram_username} (ID: {student_id})")
         else:
