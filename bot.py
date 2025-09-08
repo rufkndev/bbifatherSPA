@@ -7,6 +7,7 @@ Telegram Bot для BBI Father
 import os
 import asyncio
 import logging
+import requests
 from typing import Optional
 
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
@@ -28,6 +29,7 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 ADMIN_CHAT_ID = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "")  # ID администратора для тех поддержки
 ADMIN_USERNAME = os.getenv("TELEGRAM_ADMIN_USERNAME", "bbifatheradmin")  # Username администратора  
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://bbifather.ru")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://bbifather.ru/api")  # URL для API запросов
 
 if not BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN не задан в .env файле!")
@@ -55,6 +57,9 @@ class BBIFatherBot:
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка команды /start"""
         user = update.effective_user
+        
+        # Сохраняем chat_id пользователя для отправки уведомлений
+        await self.save_user_chat_id(user)
         
         welcome_text = f"""
 👋 Привет, {user.first_name}!
@@ -139,6 +144,32 @@ class BBIFatherBot:
             input_field_placeholder="Выберите действие из меню ниже"
         )
 
+    async def save_user_chat_id(self, user):
+        """Сохранение chat_id пользователя для отправки уведомлений"""
+        if not user.username:
+            logger.warning(f"У пользователя {user.first_name} (ID: {user.id}) нет username")
+            return
+            
+        try:
+            response = requests.post(
+                f"{API_BASE_URL}/save-chat-id",
+                json={
+                    "telegram_username": user.username,
+                    "chat_id": user.id,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name or ""
+                },
+                timeout=5
+            )
+            
+            if response.status_code == 200:
+                logger.info(f"✅ Chat ID сохранен для @{user.username}")
+            else:
+                logger.warning(f"⚠️ Не удалось сохранить chat_id: {response.text}")
+                
+        except Exception as e:
+            logger.error(f"❌ Ошибка сохранения chat_id: {e}")
+
     async def send_rules(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edit: bool = False):
         """Отправка правил пользования сервисом"""
         rules_text = """
@@ -220,6 +251,9 @@ class BBIFatherBot:
         message_text = update.message.text
         
         logger.info(f"📨 Получено сообщение: '{message_text}' от {user.username or user.first_name}")
+        
+        # Сохраняем chat_id пользователя для отправки уведомлений
+        await self.save_user_chat_id(user)
         
         # Если пользователь ждет ответа поддержки
         if context.user_data.get('waiting_for_support'):

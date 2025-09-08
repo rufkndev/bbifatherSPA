@@ -126,6 +126,21 @@ async def send_status_notification_to_user(order: dict, new_status: str):
         print("⚠️ У пользователя не указан telegram")
         return
     
+    # Получаем chat_id пользователя из БД
+    try:
+        student_response = supabase.table('students').select('chat_id').eq('telegram', user_telegram).limit(1).execute()
+        
+        if not student_response.data or not student_response.data[0].get('chat_id'):
+            print(f"⚠️ Chat ID не найден для пользователя @{user_telegram}. Пользователь должен написать боту /start")
+            return
+        
+        user_chat_id = student_response.data[0]['chat_id']
+        print(f"📱 Отправляем уведомление пользователю @{user_telegram} (chat_id: {user_chat_id})")
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения chat_id: {e}")
+        return
+    
     # Сообщения для разных статусов
     status_messages = {
         'new': {
@@ -209,11 +224,10 @@ async def send_status_notification_to_user(order: dict, new_status: str):
     }
     
     try:
-        clean_username = user_telegram.lstrip('@')
         telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         
         payload = {
-            'chat_id': f'@{clean_username}',
+            'chat_id': user_chat_id,  # Используем chat_id вместо username
             'text': notification_text,
             'parse_mode': 'HTML',
             'reply_markup': keyboard
@@ -222,12 +236,12 @@ async def send_status_notification_to_user(order: dict, new_status: str):
         response = requests.post(telegram_url, json=payload, timeout=10)
         
         if response.status_code == 200:
-            print(f"✅ Уведомление о статусе '{new_status}' отправлено пользователю @{clean_username}")
+            print(f"✅ Уведомление о статусе '{new_status}' отправлено пользователю @{user_telegram}")
         else:
-            print(f"⚠️ Не удалось отправить уведомление @{clean_username}: {response.text}")
+            print(f"⚠️ Не удалось отправить уведомление @{user_telegram}: {response.text}")
             
     except Exception as e:
-        print(f"❌ Ошибка отправки уведомления пользователю {user_telegram}: {e}")
+        print(f"❌ Ошибка отправки уведомления пользователю @{user_telegram}: {e}")
 
 # Старый startup удален - теперь используем lifespan
 
@@ -235,6 +249,47 @@ async def send_status_notification_to_user(order: dict, new_status: str):
 @app.get("/")
 def read_root():
     return {"message": "Student Orders API is running"}
+
+@app.post("/api/save-chat-id")
+async def save_chat_id(request: Request):
+    """Сохранение chat_id пользователя для отправки уведомлений"""
+    try:
+        data = await request.json()
+        telegram_username = data.get('telegram_username', '').lstrip('@')
+        chat_id = data.get('chat_id')
+        first_name = data.get('first_name', '')
+        last_name = data.get('last_name', '')
+        
+        if not telegram_username or not chat_id:
+            raise HTTPException(status_code=400, detail="Не указан telegram_username или chat_id")
+        
+        # Находим студента по telegram username
+        student_response = supabase.table('students').select('id').eq('telegram', telegram_username).limit(1).execute()
+        
+        if student_response.data:
+            # Обновляем существующего студента
+            student_id = student_response.data[0]['id']
+            supabase.table('students').update({
+                'chat_id': str(chat_id),
+                'name': first_name + (' ' + last_name if last_name else ''),
+                'updated_at': datetime.now().isoformat()
+            }).eq('id', student_id).execute()
+            print(f"✅ Chat ID обновлен для студента @{telegram_username} (ID: {student_id})")
+        else:
+            # Создаем нового студента с chat_id (будет дополнен при создании заказа)
+            supabase.table('students').insert({
+                'telegram': telegram_username,
+                'chat_id': str(chat_id),
+                'name': first_name + (' ' + last_name if last_name else ''),
+                'group_name': 'Не указана'  # Будет обновлено при создании заказа
+            }).execute()
+            print(f"✅ Создан новый студент @{telegram_username} с chat_id")
+        
+        return {"status": "success", "message": "Chat ID сохранен"}
+        
+    except Exception as e:
+        print(f"❌ Ошибка сохранения chat_id: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка сохранения: {str(e)}")
 
 # Students endpoints
 @app.get("/api/students")
@@ -262,6 +317,7 @@ def get_subjects():
 @app.get("/api/orders")
 def get_orders(page: int = 1, limit: int = 10, telegram: str = None):
     try:
+        print(f"📥 GET /api/orders - page: {page}, limit: {limit}, telegram: {telegram}")
         offset = (page - 1) * limit
         
         query = supabase.table('orders').select("""
@@ -274,26 +330,33 @@ def get_orders(page: int = 1, limit: int = 10, telegram: str = None):
 
         if telegram:
             clean_telegram = telegram.lstrip('@')
+            print(f"🔍 Ищем заказы для пользователя: @{clean_telegram}")
             
             # 1. Найти студента по telegram
             student_response = supabase.table('students').select('id').eq('telegram', clean_telegram).limit(1).execute()
+            print(f"👤 Поиск студента: {student_response}")
             
             if not student_response.data:
                 # Если студент не найден, возвращаем пустой список
+                print(f"❌ Студент @{clean_telegram} не найден в БД")
                 return {"orders": [], "total": 0}
                 
             student_id = student_response.data[0]['id']
+            print(f"✅ Найден студент ID: {student_id}")
             
             # 2. Фильтровать заказы по student_id
             query = query.eq('student_id', student_id)
             count_query = count_query.eq('student_id', student_id)
 
         # Получаем заказы с пагинацией
+        print(f"📊 Выполняем запрос заказов...")
         response = query.order('created_at', desc=True).range(offset, offset + limit - 1).execute()
+        print(f"📦 Получено заказов: {len(response.data)}")
         
         # Получаем общее количество
         total_response = count_query.execute()
         total = total_response.count if total_response.count is not None else 0
+        print(f"📈 Общее количество заказов: {total}")
 
         orders = []
         for order_data in response.data:
@@ -318,10 +381,13 @@ def get_orders(page: int = 1, limit: int = 10, telegram: str = None):
             del order['subjects']
             orders.append(order)
         
+        print(f"✅ Возвращаем {len(orders)} заказов")
         return {"orders": orders, "total": total}
         
     except Exception as e:
         print(f"❌ BACKEND: Ошибка получения заказов: {e}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Ошибка на сервере при получении заказов: {str(e)}")
 
 @app.get("/api/orders/{order_id}")
@@ -393,25 +459,30 @@ async def create_order(request: Request):
         student_data = data['student']
         # Убираем @ из ника
         clean_telegram = student_data['telegram'].lstrip('@')
+        print(f"👤 Обработка студента: @{clean_telegram}")
         
         # Проверяем существует ли студент
         existing_student = supabase.table('students').select('id').eq('telegram', clean_telegram).limit(1).execute()
+        print(f"🔍 Поиск существующего студента: {existing_student}")
         
         if existing_student.data and len(existing_student.data) > 0:
             student_id = existing_student.data[0]['id']
             print(f"👤 Найден существующий студент ID: {student_id}")
             # Обновляем данные студента
-            supabase.table('students').update({
+            update_result = supabase.table('students').update({
                 'name': student_data['name'],
                 'group_name': student_data['group']
             }).eq('id', student_id).execute()
+            print(f"📝 Обновление данных студента: {update_result}")
         else:
             # Создаем нового студента
+            print(f"➕ Создаем нового студента: {student_data}")
             new_student = supabase.table('students').insert({
                 'name': student_data['name'],
                 'group_name': student_data['group'],
                 'telegram': clean_telegram
             }).execute()
+            print(f"✅ Результат создания студента: {new_student}")
             student_id = new_student.data[0]['id']
             print(f"👤 Создан новый студент ID: {student_id}")
         
@@ -432,7 +503,7 @@ async def create_order(request: Request):
         print(f"💰 Стоимость заказа: {actual_price} ₽")
         
         # Создаем заказ
-        new_order = supabase.table('orders').insert({
+        order_data = {
             'student_id': student_id,
             'subject_id': subject_id,
             'title': data['title'],
@@ -444,13 +515,19 @@ async def create_order(request: Request):
             'is_full_course': is_full_course,
             'actual_price': actual_price,
             'status': 'new'
-        }).execute()
+        }
+        print(f"📝 Создаем заказ с данными: {order_data}")
+        
+        new_order = supabase.table('orders').insert(order_data).execute()
+        print(f"✅ Результат создания заказа: {new_order}")
         
         order_id = new_order.data[0]['id']
         print(f"📝 Создан заказ ID: {order_id}")
         
         # Получаем созданный заказ с связанными данными
+        print(f"🔍 Получаем созданный заказ...")
         created_order = get_order(order_id)
+        print(f"📦 Получен заказ: {created_order}")
         
         # Отправляем уведомление администратору о новом заказе
         try:
@@ -790,7 +867,15 @@ async def notify_payment(order_id: int):
         
         # Отправляем уведомление пользователю о получении заявки на оплату
         try:
-            notification_text = f"""
+            user_telegram = order['student']['telegram']
+            
+            # Получаем chat_id пользователя из БД
+            student_response = supabase.table('students').select('chat_id').eq('telegram', user_telegram).limit(1).execute()
+            
+            if student_response.data and student_response.data[0].get('chat_id'):
+                user_chat_id = student_response.data[0]['chat_id']
+                
+                notification_text = f"""
 💳 <b>Заявка на оплату получена</b>
 
 📝 <b>Заказ #{order['id']}:</b> {order['title']}
@@ -801,41 +886,40 @@ async def notify_payment(order_id: int):
 Ваша заявка на оплату получена и проверяется администратором. После подтверждения оплаты статус заказа будет обновлен.
 
 Обычно проверка занимает от 15 минут до нескольких часов.
-            """.strip()
-            
-            user_telegram = order['student']['telegram']
-            clean_username = user_telegram.lstrip('@')
-            
-            # Создаем reply keyboard
-            keyboard = {
-                "keyboard": [
-                    [
-                        {"text": "📱 Открыть приложение", "web_app": {"url": f"https://bbifather.ru?telegram={user_telegram}"}},
+                """.strip()
+                
+                # Создаем reply keyboard
+                keyboard = {
+                    "keyboard": [
+                        [
+                            {"text": "📱 Открыть приложение", "web_app": {"url": f"https://bbifather.ru?telegram={user_telegram}"}},
+                        ],
+                        [
+                            {"text": "💬 Техподдержка"},
+                            {"text": "📋 Правила"}
+                        ]
                     ],
-                    [
-                        {"text": "💬 Техподдержка"},
-                        {"text": "📋 Правила"}
-                    ]
-                ],
-                "resize_keyboard": True,
-                "one_time_keyboard": False,
-                "input_field_placeholder": "Выберите действие из меню ниже"
-            }
-            
-            telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-            payload = {
-                'chat_id': f'@{clean_username}',
-                'text': notification_text,
-                'parse_mode': 'HTML',
-                'reply_markup': keyboard
-            }
-            
-            response = requests.post(telegram_url, json=payload, timeout=10)
-            
-            if response.status_code == 200:
-                print(f"✅ Уведомление о заявке на оплату отправлено пользователю @{clean_username}")
+                    "resize_keyboard": True,
+                    "one_time_keyboard": False,
+                    "input_field_placeholder": "Выберите действие из меню ниже"
+                }
+                
+                telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+                payload = {
+                    'chat_id': user_chat_id,  # Используем chat_id
+                    'text': notification_text,
+                    'parse_mode': 'HTML',
+                    'reply_markup': keyboard
+                }
+                
+                response = requests.post(telegram_url, json=payload, timeout=10)
+                
+                if response.status_code == 200:
+                    print(f"✅ Уведомление о заявке на оплату отправлено пользователю @{user_telegram}")
+                else:
+                    print(f"⚠️ Не удалось отправить уведомление @{user_telegram}: {response.text}")
             else:
-                print(f"⚠️ Не удалось отправить уведомление @{clean_username}: {response.text}")
+                print(f"⚠️ Chat ID не найден для пользователя @{user_telegram}")
                 
         except Exception as e:
             print(f"❌ Ошибка отправки уведомления пользователю: {e}")
