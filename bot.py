@@ -151,8 +151,16 @@ class BBIFatherBot:
             return
             
         try:
+            # Убеждаемся что URL содержит /api
+            api_url = API_BASE_URL
+            if not api_url.endswith('/api'):
+                api_url = api_url.rstrip('/') + '/api'
+            
+            full_url = f"{api_url}/save-chat-id"
+            logger.info(f"🌐 Отправляем chat_id на: {full_url}")
+            
             response = requests.post(
-                f"{API_BASE_URL}/save-chat-id",
+                full_url,
                 json={
                     "telegram_username": user.username,
                     "chat_id": user.id,
