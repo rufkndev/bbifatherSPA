@@ -8,6 +8,7 @@ import os
 import asyncio
 import logging
 import requests
+import json
 from datetime import datetime
 from typing import Optional
 
@@ -187,14 +188,8 @@ class BBIFatherBot:
                     ]])
                 )
             elif query.data == "download":
-                logger.info("📥 Обрабатываем кнопку 'Скачать'")
-                await query.edit_message_text(
-                    "📥 <b>Скачивание файлов</b>\n\nФункция в разработке.\nКнопка работает!",
-                    parse_mode='HTML',
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")
-                    ]])
-                )
+                logger.info("📥 Обрабатываем кнопку 'Скачать файлы'")
+                await self.handle_download_request(update, context)
             elif query.data == "back_to_menu":
                 logger.info("🔙 Возвращаемся в главное меню")
                 user = update.effective_user
@@ -462,28 +457,60 @@ class BBIFatherBot:
         user = update.effective_user
         user_telegram = user.username
         
+        logger.info(f"📥 DOWNLOAD REQUEST: Пользователь {user_telegram or user.first_name} запрашивает файлы")
+        
         if not user_telegram:
+            logger.warning("❌ У пользователя не указан username")
             await update.callback_query.answer("❌ У вас не указан username в Telegram!")
+            await update.callback_query.edit_message_text(
+                "❌ <b>Ошибка доступа</b>\n\n"
+                "У вас не указан username в Telegram.\n"
+                "Установите username в настройках Telegram и повторите попытку.",
+                parse_mode='HTML',
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
+                ])
+            )
             return
             
         try:
+            logger.info(f"🌐 API REQUEST: {API_BASE_URL}/orders?telegram={user_telegram}&limit=50")
+            
             # Получаем заказы пользователя с готовыми файлами
             response = requests.get(
                 f"{API_BASE_URL}/orders",
-                params={'telegram': user_telegram, 'limit': 50}
+                params={'telegram': user_telegram, 'limit': 50},
+                timeout=10
             )
             
+            logger.info(f"📡 API RESPONSE: Status {response.status_code}")
+            
             if response.status_code == 200:
-                data = response.json()
-                orders_with_files = [
-                    order for order in data['orders'] 
-                    if order.get('status') == 'completed' and order.get('files')
-                ]
-                
-                if not orders_with_files:
+                try:
+                    data = response.json()
+                    logger.info(f"📊 API DATA: Получено заказов: {len(data.get('orders', []))}")
+                    
+                    orders_with_files = [
+                        order for order in data.get('orders', [])
+                        if order.get('status') == 'completed' and order.get('files')
+                    ]
+                    
+                    logger.info(f"📁 ORDERS WITH FILES: Найдено заказов с файлами: {len(orders_with_files)}")
+                    
+                    if not orders_with_files:
+                        logger.info("📭 Нет готовых заказов с файлами")
+                        await update.callback_query.edit_message_text(
+                            "📭 У вас пока нет готовых работ для скачивания.\n\n"
+                            "Готовые файлы появятся здесь после завершения заказов.",
+                            reply_markup=InlineKeyboardMarkup([
+                                [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
+                            ])
+                        )
+                        return
+                except json.JSONDecodeError as json_error:
+                    logger.error(f"❌ JSON ERROR: Ошибка парсинга ответа API: {json_error}")
                     await update.callback_query.edit_message_text(
-                        "📭 У вас пока нет готовых работ для скачивания.\n\n"
-                        "Готовые файлы появятся здесь после завершения заказов.",
+                        "❌ Ошибка обработки данных с сервера.\n\nПопробуйте позже.",
                         reply_markup=InlineKeyboardMarkup([
                             [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
                         ])
@@ -508,17 +535,51 @@ class BBIFatherBot:
                     parse_mode='HTML'
                 )
             else:
+                logger.error(f"❌ API ERROR: HTTP {response.status_code} - {response.text}")
+                if response.status_code == 404:
+                    error_msg = "❌ Пользователь не найден в системе.\n\nОбратитесь к администратору для регистрации."
+                elif response.status_code == 500:
+                    error_msg = "❌ Внутренняя ошибка сервера.\n\nПопробуйте позже или обратитесь в техподдержку."
+                elif response.status_code == 403:
+                    error_msg = "❌ Доступ запрещен.\n\nПроверьте свои права доступа."
+                else:
+                    error_msg = f"❌ Ошибка сервера (HTTP {response.status_code}).\n\nПопробуйте позже."
+                    
                 await update.callback_query.edit_message_text(
-                    "❌ Ошибка при получении списка заказов. Попробуйте позже.",
+                    error_msg,
                     reply_markup=InlineKeyboardMarkup([
                         [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
                     ])
                 )
                 
-        except Exception as e:
-            logger.error(f"Ошибка при обработке запроса скачивания: {e}")
+        except requests.exceptions.Timeout:
+            logger.error("⏰ TIMEOUT: API запрос превысил время ожидания")
             await update.callback_query.edit_message_text(
-                "❌ Произошла ошибка. Попробуйте позже.",
+                "❌ <b>Превышено время ожидания</b>\n\n"
+                "Сервер не отвечает. Попробуйте позже.",
+                parse_mode='HTML',
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
+                ])
+            )
+        except requests.exceptions.ConnectionError:
+            logger.error("🌐 CONNECTION ERROR: Не удается подключиться к API серверу")
+            await update.callback_query.edit_message_text(
+                "❌ <b>Нет соединения с сервером</b>\n\n"
+                "Проверьте интернет-соединение или попробуйте позже.",
+                parse_mode='HTML',
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
+                ])
+            )
+        except Exception as e:
+            logger.error(f"❌ UNEXPECTED ERROR: Неожиданная ошибка при обработке запроса: {e}")
+            import traceback
+            logger.error(f"TRACEBACK: {traceback.format_exc()}")
+            await update.callback_query.edit_message_text(
+                "❌ <b>Произошла неожиданная ошибка</b>\n\n"
+                "Обратитесь в техподдержку, если проблема повторяется.",
+                parse_mode='HTML',
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
                 ])
@@ -693,6 +754,20 @@ def main():
     """Главная функция"""
     try:
         logger.info("🚀 Инициализация BBI Father Telegram Bot...")
+        
+        # Проверяем переменные окружения
+        if not BOT_TOKEN:
+            logger.error("❌ TELEGRAM_BOT_TOKEN не задан!")
+            return
+            
+        logger.info(f"🌐 API_BASE_URL: {API_BASE_URL}")
+        logger.info(f"💬 ADMIN_USERNAME: {ADMIN_USERNAME}")
+        
+        if ADMIN_CHAT_ID:
+            logger.info(f"👨‍💼 ADMIN_CHAT_ID настроен")
+        else:
+            logger.warning("⚠️ ADMIN_CHAT_ID не настроен")
+        
         bot = BBIFatherBot()
         logger.info("🤖 BBI Father Telegram Bot запущен успешно!")
         
