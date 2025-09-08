@@ -314,22 +314,26 @@ class BBIFatherBot:
                 parse_mode='HTML'
             )
 
-    async def run(self):
+    def run(self):
         """Запуск бота"""
         logger.info("🤖 Запуск BBI Father Telegram Bot...")
-        await self.app.run_polling(drop_pending_updates=True)
+        self.app.run_polling(drop_pending_updates=True)
 
 
-async def main():
+def main():
     """Главная функция"""
     try:
         bot = BBIFatherBot()
-        await bot.run()
+        logger.info("🤖 BBI Father Telegram Bot запущен успешно!")
+        # Запускаем бота
+        bot.run()
     except KeyboardInterrupt:
         logger.info("👋 Бот остановлен пользователем")
     except Exception as e:
         logger.error(f"❌ Критическая ошибка: {e}")
+    finally:
+        logger.info("🔄 Завершение работы бота...")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
