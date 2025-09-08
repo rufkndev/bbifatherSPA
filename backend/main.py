@@ -419,40 +419,38 @@ async def update_order_status(order_id: int, request: Request):
 Детали заказа доступны в приложении 👇
                     """.strip()
                     
-                    # Отправляем уведомление пользователю через бота
+                    # Отправляем уведомление пользователю через простой HTTP запрос
                     user_telegram = updated_order['student']['telegram']
                     if user_telegram:
                         try:
-                            # Импорт функции отправки уведомлений
-                            import asyncio
-                            import sys
-                            import os
+                            # Используем простой HTTP запрос к Telegram API
+                            bot_token = BOT_TOKEN
+                            clean_username = user_telegram.lstrip('@')
                             
-                            # Добавляем путь к bot.py в sys.path
-                            current_dir = os.path.dirname(os.path.abspath(__file__))
-                            parent_dir = os.path.dirname(current_dir)
-                            sys.path.append(parent_dir)
+                            notification_text = f"""
+🔔 <b>Обновление по заказу #{order_id}</b>
+
+📝 <b>Заказ:</b> {updated_order['title']}
+📊 <b>Статус:</b> {status_message}
+
+Детали заказа доступны в приложении и боте 👇
+
+Нажмите /start чтобы открыть меню
+                            """.strip()
                             
-                            # Импортируем функцию уведомлений из бота
-                            try:
-                                from bot import BBIFatherBot
-                                
-                                # Запускаем асинхронную отправку уведомления
-                                loop = asyncio.new_event_loop()
-                                asyncio.set_event_loop(loop)
-                                loop.run_until_complete(
-                                    BBIFatherBot.send_status_notification(
-                                        user_telegram, 
-                                        order_id, 
-                                        status, 
-                                        updated_order['title']
-                                    )
-                                )
-                                loop.close()
-                                
-                            except ImportError:
-                                # Если не удалось импортировать бот, используем простое уведомление
-                                print(f"📱 УВЕДОМЛЕНИЕ ПОЛЬЗОВАТЕЛЮ @{user_telegram}: {status_message}")
+                            telegram_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                            payload = {
+                                'chat_id': f'@{clean_username}',
+                                'text': notification_text,
+                                'parse_mode': 'HTML'
+                            }
+                            
+                            response = requests.post(telegram_url, json=payload, timeout=10)
+                            
+                            if response.status_code == 200:
+                                print(f"✅ Уведомление отправлено пользователю @{clean_username}")
+                            else:
+                                print(f"⚠️ Не удалось отправить уведомление @{clean_username}: {response.text}")
                                 
                         except Exception as notification_error:
                             print(f"⚠️ Ошибка отправки уведомления пользователю: {notification_error}")

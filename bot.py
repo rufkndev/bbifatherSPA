@@ -140,21 +140,38 @@ class BBIFatherBot:
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка нажатий на inline кнопки"""
         query = update.callback_query
-        await query.answer()
+        user = update.effective_user
         
-        if query.data == "rules":
-            await self.send_rules(update, context, edit=True)
-        elif query.data == "support":
-            await self.handle_support_request(update, context, edit=True)
-        elif query.data == "help":
-            await self.send_user_guide(update, context, edit=True)
-        elif query.data == "download":
-            await self.handle_download_request(update, context)
-        elif query.data.startswith("download_"):
-            order_id = int(query.data.split("_")[1])
-            await self.send_order_files(update, context, order_id)
-        elif query.data == "back_to_menu":
-            await self.back_to_main_menu(update, context)
+        logger.info(f"🔘 Нажата кнопка: {query.data} пользователем {user.username or user.first_name}")
+        
+        try:
+            await query.answer()
+            
+            if query.data == "rules":
+                logger.info("📋 Показываем правила")
+                await self.send_rules(update, context, edit=True)
+            elif query.data == "support":
+                logger.info("💬 Показываем техподдержку")
+                await self.handle_support_request(update, context, edit=True)
+            elif query.data == "help":
+                logger.info("ℹ️ Показываем справку")
+                await self.send_user_guide(update, context, edit=True)
+            elif query.data == "download":
+                logger.info("📥 Обрабатываем запрос скачивания")
+                await self.handle_download_request(update, context)
+            elif query.data.startswith("download_"):
+                order_id = int(query.data.split("_")[1])
+                logger.info(f"📤 Отправляем файлы заказа {order_id}")
+                await self.send_order_files(update, context, order_id)
+            elif query.data == "back_to_menu":
+                logger.info("🔙 Возврат в главное меню")
+                await self.back_to_main_menu(update, context)
+            else:
+                logger.warning(f"❓ Неизвестная кнопка: {query.data}")
+                
+        except Exception as e:
+            logger.error(f"❌ Ошибка обработки кнопки {query.data}: {e}")
+            await query.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
 
     async def send_rules(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edit: bool = False):
         """Отправка правил пользования сервисом"""
@@ -602,19 +619,19 @@ class BBIFatherBot:
         except Exception as e:
             logger.error(f"❌ Ошибка отправки уведомления пользователю {user_telegram}: {e}")
 
-    def run(self):
+    async def run(self):
         """Запуск бота"""
         logger.info("🤖 Запуск BBI Father Telegram Bot...")
-        self.app.run_polling(drop_pending_updates=True)
+        await self.app.run_polling(drop_pending_updates=True)
 
 
-def main():
+async def main():
     """Главная функция"""
     try:
         bot = BBIFatherBot()
         logger.info("🤖 BBI Father Telegram Bot запущен успешно!")
         # Запускаем бота
-        bot.run()
+        await bot.run()
     except KeyboardInterrupt:
         logger.info("👋 Бот остановлен пользователем")
     except Exception as e:
@@ -624,4 +641,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
