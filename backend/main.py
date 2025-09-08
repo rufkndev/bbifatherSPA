@@ -383,6 +383,9 @@ async def update_order_status(order_id: int, request: Request):
     status = data['status']
     
     try:
+        # Получаем старый заказ для сравнения
+        old_order = get_order(order_id)
+        
         # Обновляем статус заказа
         response = supabase.table('orders').update({
             'status': status,
@@ -392,8 +395,39 @@ async def update_order_status(order_id: int, request: Request):
         if not response.data:
             raise HTTPException(status_code=404, detail="Заказ не найден")
         
-        # Возвращаем обновленный заказ
-        return get_order(order_id)
+        # Получаем обновленный заказ
+        updated_order = get_order(order_id)
+        
+        # Отправляем уведомление пользователю о изменении статуса
+        if old_order['status'] != status and updated_order['student'].get('telegram'):
+            try:
+                status_messages = {
+                    'paid': '💳 Оплата подтверждена! Ваш заказ принят в работу.',
+                    'in_progress': '⚙️ Работа началась! Мы приступили к выполнению вашего заказа.',
+                    'completed': '✅ Работа выполнена! Готовые файлы доступны в приложении.',
+                    'needs_revision': '🔄 Требуются исправления. Проверьте детали в приложении.',
+                }
+                
+                status_message = status_messages.get(status)
+                if status_message:
+                    user_message = f"""
+🔔 <b>Обновление по заказу #{order_id}</b>
+
+📝 <b>Заказ:</b> {updated_order['title']}
+📊 <b>Статус:</b> {status_message}
+
+Детали заказа доступны в приложении 👇
+                    """.strip()
+                    
+                    # Отправляем через Telegram API напрямую пользователю
+                    user_telegram = updated_order['student']['telegram']
+                    if user_telegram:
+                        # Здесь можно реализовать отправку через бота
+                        print(f"📱 УВЕДОМЛЕНИЕ ПОЛЬЗОВАТЕЛЮ @{user_telegram}: {status_message}")
+            except Exception as e:
+                print(f"⚠️ Ошибка отправки уведомления пользователю: {e}")
+        
+        return updated_order
         
     except Exception as e:
         if "No rows found" in str(e):

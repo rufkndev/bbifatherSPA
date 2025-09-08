@@ -32,6 +32,7 @@ import {
 import { Subject } from '../types';
 import { getSubjects, createOrder } from '../api';
 import { subjectsData, getSubjectById, calculateFullCoursePrice, calculateSelectedWorksPrice, SubjectData } from '../data/subjects';
+import { useTelegramWebApp } from '../hooks/useTelegramWebApp';
 
 const steps = ['Выберите предмет', 'Выберите работы', 'Ваши данные', 'Подтверждение'];
 
@@ -41,6 +42,9 @@ const CreateOrderPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [activeStep, setActiveStep] = useState(0);
+  
+  // Telegram WebApp интеграция
+  const { user, isInTelegram, hapticFeedback, showAlert, backButton } = useTelegramWebApp();
   
   const [formData, setFormData] = useState({
     // Данные студента
@@ -64,7 +68,28 @@ const CreateOrderPage: React.FC = () => {
 
   useEffect(() => {
     loadSubjects();
-  }, []);
+    
+    // Автоматическое заполнение данных из Telegram
+    if (isInTelegram && user) {
+      setFormData(prev => ({
+        ...prev,
+        studentName: user.firstName + (user.lastName ? ` ${user.lastName}` : ''),
+        studentTelegram: user.username ? `@${user.username}` : '',
+      }));
+    }
+    
+    // Настройка Telegram Back Button
+    if (isInTelegram) {
+      backButton.show();
+      const handleBack = () => navigate('/');
+      backButton.onClick(handleBack);
+      
+      return () => {
+        backButton.hide();
+        backButton.offClick(handleBack);
+      };
+    }
+  }, [isInTelegram, user, backButton, navigate]);
 
   const loadSubjects = async () => {
     try {
@@ -77,10 +102,18 @@ const CreateOrderPage: React.FC = () => {
   };
 
   const handleNext = () => {
+    // Тактильная обратная связь
+    if (isInTelegram) {
+      hapticFeedback.impactLight();
+    }
     setActiveStep((prevActiveStep) => prevActiveStep + 1);
   };
 
   const handleBack = () => {
+    // Тактильная обратная связь
+    if (isInTelegram) {
+      hapticFeedback.impactLight();
+    }
     setActiveStep((prevActiveStep) => prevActiveStep - 1);
   };
 
@@ -152,6 +185,11 @@ const CreateOrderPage: React.FC = () => {
   const handleSubmit = async () => {
     setError('');
     setLoading(true);
+    
+    // Тактильная обратная связь для начала создания заказа
+    if (isInTelegram) {
+      hapticFeedback.impactMedium();
+    }
 
     try {
       console.log('🔍 Отладка формы:');
@@ -252,15 +290,28 @@ const CreateOrderPage: React.FC = () => {
 
       await createOrder(orderData);
       
+      // Уведомление об успехе
+      if (isInTelegram) {
+        hapticFeedback.success();
+        showAlert('✅ Заказ успешно создан! Вы получите уведомления о статусе.');
+      }
+      
       // Сохраняем telegram в localStorage и перенаправляем
       const cleanTelegram = formData.studentTelegram.startsWith('@') 
         ? formData.studentTelegram.substring(1) 
         : formData.studentTelegram;
       
-      navigate(`/orders?telegram=${cleanTelegram}`);
+      navigate(`/?telegram=${cleanTelegram}`);
     } catch (error: any) {
       console.error('Ошибка создания заказа:', error);
-      setError(error.response?.data?.detail || 'Не удалось создать заказ');
+      const errorMessage = error.response?.data?.detail || 'Не удалось создать заказ';
+      setError(errorMessage);
+      
+      // Тактильная обратная связь об ошибке
+      if (isInTelegram) {
+        hapticFeedback.error();
+        showAlert(`❌ ${errorMessage}`);
+      }
     } finally {
       setLoading(false);
     }

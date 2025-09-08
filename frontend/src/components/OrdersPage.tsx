@@ -31,6 +31,7 @@ import { Order, OrderStatus } from '../types';
 import { getOrders, downloadFile, downloadAllFiles, api, requestOrderRevision } from '../api';
 import { format, differenceInDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import { useTelegramWebApp } from '../hooks/useTelegramWebApp';
 
 const statusConfig = {
   [OrderStatus.NEW]: { color: 'info' as const, label: 'Новый', icon: '🆕', progress: 10 },
@@ -58,9 +59,24 @@ const OrdersPage: React.FC = () => {
   const [revisionGrade, setRevisionGrade] = useState('');
   const [submittingRevision, setSubmittingRevision] = useState(false);
 
-  // 1. Эффект для определения текущего пользователя
+  // Telegram WebApp интеграция
+  const { user, isInTelegram, hapticFeedback, showAlert, showConfirm } = useTelegramWebApp();
+
+  // 1. Эффект для определения текущего пользователя (с Telegram WebApp поддержкой)
   useEffect(() => {
     const urlTelegram = searchParams.get('telegram');
+    
+    // Приоритет: Telegram WebApp пользователь
+    if (isInTelegram && user?.username) {
+      const telegramUsername = user.username;
+      localStorage.setItem('telegramUser', telegramUsername);
+      setCurrentUser(telegramUsername);
+      setIsAdminView(false);
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    
+    // Второй приоритет: URL параметр
     if (urlTelegram) {
       const cleanUser = urlTelegram.startsWith('@') ? urlTelegram.substring(1) : urlTelegram;
       localStorage.setItem('telegramUser', cleanUser);
@@ -68,6 +84,7 @@ const OrdersPage: React.FC = () => {
       setIsAdminView(false);
       setSearchParams({}, { replace: true });
     } else {
+      // Третий приоритет: сохранённый пользователь
       const storedUser = localStorage.getItem('telegramUser');
       if (storedUser) {
         setCurrentUser(storedUser);
@@ -76,7 +93,7 @@ const OrdersPage: React.FC = () => {
         setLoading(false); // Нет пользователя, заканчиваем загрузку
       }
     }
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, isInTelegram, user]);
 
   // 2. Эффект для загрузки заказов, когда пользователь изменился
   useEffect(() => {
@@ -165,11 +182,26 @@ const OrdersPage: React.FC = () => {
 
   const handlePaymentNotification = async (orderId: number) => {
     try {
+      // Тактильная обратная связь
+      hapticFeedback.impactLight();
+      
       await api.post(`/api/orders/${orderId}/payment-notification`);
       setPaymentNotifications(prev => new Set(prev).add(orderId));
-      alert('✅ Уведомление об оплате отправлено администратору!');
+      
+      // Используем Telegram уведомление или обычный alert
+      if (isInTelegram) {
+        hapticFeedback.success();
+        showAlert('✅ Уведомление об оплате отправлено администратору!');
+      } else {
+        alert('✅ Уведомление об оплате отправлено администратору!');
+      }
     } catch (error) {
       console.error('Ошибка отправки уведомления об оплате:', error);
+      
+      if (isInTelegram) {
+        hapticFeedback.error();
+        showAlert('❌ Ошибка отправки уведомления. Попробуйте позже.');
+      }
     }
   };
 
@@ -183,6 +215,10 @@ const OrdersPage: React.FC = () => {
   const handleSubmitRevision = async () => {
     if (!selectedOrderForRevision?.id || !revisionComment.trim()) return;
     setSubmittingRevision(true);
+    
+    // Тактильная обратная связь
+    hapticFeedback.impactMedium();
+    
     try {
       const updatedOrder = await requestOrderRevision(
         selectedOrderForRevision.id,
@@ -191,9 +227,20 @@ const OrdersPage: React.FC = () => {
       );
       setOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
       handleCloseRevisionDialog();
-      alert('✅ Запрос на исправления отправлен!');
+      
+      if (isInTelegram) {
+        hapticFeedback.success();
+        showAlert('✅ Запрос на исправления отправлен!');
+      } else {
+        alert('✅ Запрос на исправления отправлен!');
+      }
     } catch (error) {
       console.error('Ошибка отправки запроса исправлений:', error);
+      
+      if (isInTelegram) {
+        hapticFeedback.error();
+        showAlert('❌ Ошибка отправки запроса. Попробуйте позже.');
+      }
     } finally {
       setSubmittingRevision(false);
     }
