@@ -59,6 +59,11 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 BOT_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
+# URL для публичного доступа к файлам (для Telegram Bot API)
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://bbifather.ru")
+
+print(f"🔗 PUBLIC_BASE_URL: {PUBLIC_BASE_URL}")
+
 if not SUPABASE_URL or not SUPABASE_KEY:
     print("⚠️ SUPABASE_URL и SUPABASE_KEY должны быть установлены!")
     print("Создайте .env файл или установите переменные окружения")
@@ -359,18 +364,33 @@ async def send_files_to_telegram_handler(request: Request):
         # Отправляем каждый файл
         sent_count = 0
         for file_info in files:
+            file_name = "unknown_file"  # Инициализируем переменную для безопасности
             try:
-                file_url = file_info.get('url')
-                file_name = file_info.get('name', 'file')
+                # Определяем структуру файла (может быть строка или словарь)
+                if isinstance(file_info, str):
+                    # Если file_info это строка, то это имя файла
+                    file_name = file_info
+                    # Создаем URL для файла на основе имени
+                    file_url = f"{PUBLIC_BASE_URL}/api/orders/{order_id}/download/{file_name}"
+                elif isinstance(file_info, dict):
+                    # Если file_info это словарь, извлекаем URL и имя
+                    file_url = file_info.get('url')
+                    file_name = file_info.get('name', 'file')
+                else:
+                    print(f"⚠️ Неизвестный тип файла: {type(file_info)}")
+                    continue
                 
-                if not file_url:
-                    print(f"❌ У файла {file_name} нет URL")
+                if not file_name:
+                    print(f"❌ Пустое имя файла: {file_info}")
                     continue
                 
                 print(f"📎 Отправляем файл: {file_name}")
+                print(f"🔗 URL файла: {file_url}")
                 
                 # Отправляем файл через Telegram Bot API
                 send_document_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
+                
+                # Сначала пробуем отправить по URL
                 document_payload = {
                     'chat_id': user_chat_id,
                     'document': file_url,
@@ -380,10 +400,40 @@ async def send_files_to_telegram_handler(request: Request):
                 response = requests.post(send_document_url, json=document_payload, timeout=30)
                 
                 if response.status_code == 200:
-                    print(f"✅ Файл {file_name} отправлен")
+                    print(f"✅ Файл {file_name} отправлен по URL")
                     sent_count += 1
                 else:
-                    print(f"❌ Ошибка отправки файла {file_name}: {response.text}")
+                    print(f"⚠️ Не удалось отправить по URL: {response.text}")
+                    
+                    # Если отправка по URL не удалась, пробуем скачать и отправить файл напрямую
+                    try:
+                        print(f"🔄 Пробуем альтернативный метод для {file_name}")
+                        
+                        # Скачиваем файл
+                        if isinstance(file_info, str):
+                            # Файл на локальном сервере
+                            local_file_path = os.path.join(UPLOADS_DIR, f"order_{order_id}", file_name)
+                            if os.path.exists(local_file_path):
+                                with open(local_file_path, 'rb') as file_data:
+                                    files = {'document': (file_name, file_data)}
+                                    data = {
+                                        'chat_id': user_chat_id,
+                                        'caption': f"📎 {file_name}"
+                                    }
+                                    response = requests.post(send_document_url, files=files, data=data, timeout=60)
+                                    
+                                    if response.status_code == 200:
+                                        print(f"✅ Файл {file_name} отправлен напрямую")
+                                        sent_count += 1
+                                    else:
+                                        print(f"❌ Ошибка прямой отправки файла {file_name}: {response.text}")
+                            else:
+                                print(f"❌ Локальный файл не найден: {local_file_path}")
+                        else:
+                            print(f"❌ Альтернативный метод не поддерживается для URL: {file_url}")
+                            
+                    except Exception as alt_e:
+                        print(f"❌ Ошибка альтернативного метода для {file_name}: {alt_e}")
                     
             except Exception as e:
                 print(f"❌ Ошибка при отправке файла {file_name}: {e}")
