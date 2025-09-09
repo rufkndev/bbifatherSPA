@@ -306,6 +306,44 @@ async def save_chat_id_direct(request: Request):
     """Сохранение chat_id пользователя для отправки уведомлений (без префикса /api/)"""
     return await save_chat_id_handler(request)
 
+async def try_direct_file_upload(file_info, file_name: str, order_id: int, user_chat_id: str, send_document_url: str) -> bool:
+    """Попытка прямой отправки файла в Telegram"""
+    try:
+        print(f"🔄 Пробуем альтернативный метод для {file_name}")
+        
+        if isinstance(file_info, str):
+            # Файл на локальном сервере
+            local_file_path = os.path.join(UPLOADS_DIR, f"order_{order_id}", file_name)
+            print(f"📁 Ищем локальный файл: {local_file_path}")
+            
+            if os.path.exists(local_file_path):
+                print(f"📎 Отправляем файл напрямую: {file_name}")
+                
+                with open(local_file_path, 'rb') as file_data:
+                    files = {'document': (file_name, file_data)}
+                    data = {
+                        'chat_id': user_chat_id,
+                        'caption': f"📎 {file_name}"
+                    }
+                    response = requests.post(send_document_url, files=files, data=data, timeout=90)
+                    
+                    if response.status_code == 200:
+                        print(f"✅ Файл {file_name} отправлен напрямую")
+                        return True
+                    else:
+                        print(f"❌ Ошибка прямой отправки файла {file_name}: {response.text}")
+                        return False
+            else:
+                print(f"❌ Локальный файл не найден: {local_file_path}")
+                return False
+        else:
+            print(f"❌ Альтернативный метод не поддерживается для URL-файлов")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Ошибка альтернативного метода для {file_name}: {e}")
+        return False
+
 async def send_files_to_telegram_handler(request: Request):
     """Общий обработчик для отправки файлов заказа в Telegram"""
     try:
@@ -331,6 +369,12 @@ async def send_files_to_telegram_handler(request: Request):
         files = order.get('files', [])
         if not files:
             raise HTTPException(status_code=404, detail="У заказа нет файлов")
+        
+        print(f"📋 Структура файлов заказа #{order_id}:")
+        print(f"   Тип: {type(files)}")
+        print(f"   Содержимое: {files}")
+        for i, file_info in enumerate(files):
+            print(f"   Файл {i}: {type(file_info)} = {file_info}")
         
         # Получаем chat_id пользователя
         student_response = supabase.table('students').select('chat_id').eq('telegram', telegram_username).limit(1).execute()
@@ -385,58 +429,52 @@ async def send_files_to_telegram_handler(request: Request):
                     continue
                 
                 print(f"📎 Отправляем файл: {file_name}")
-                print(f"🔗 URL файла: {file_url}")
                 
-                # Отправляем файл через Telegram Bot API
                 send_document_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
+                success = False
                 
-                # Сначала пробуем отправить по URL
-                document_payload = {
-                    'chat_id': user_chat_id,
-                    'document': file_url,
-                    'caption': f"📎 {file_name}"
-                }
+                # Для строк (локальные файлы) сразу пробуем прямую отправку
+                if isinstance(file_info, str):
+                    print(f"📁 Локальный файл, пробуем прямую отправку")
+                    success = await try_direct_file_upload(file_info, file_name, order_id, user_chat_id, send_document_url)
                 
-                response = requests.post(send_document_url, json=document_payload, timeout=30)
-                
-                if response.status_code == 200:
-                    print(f"✅ Файл {file_name} отправлен по URL")
-                    sent_count += 1
-                else:
-                    print(f"⚠️ Не удалось отправить по URL: {response.text}")
+                # Если не получилось или это URL-файл, пробуем отправку по URL
+                if not success:
+                    print(f"🔗 URL файла: {file_url}")
+                    print(f"🌐 Пробуем отправку по URL")
                     
-                    # Если отправка по URL не удалась, пробуем скачать и отправить файл напрямую
-                    try:
-                        print(f"🔄 Пробуем альтернативный метод для {file_name}")
+                    document_payload = {
+                        'chat_id': user_chat_id,
+                        'document': file_url,
+                        'caption': f"📎 {file_name}"
+                    }
+                    
+                    response = requests.post(send_document_url, json=document_payload, timeout=60)
+                    
+                    if response.status_code == 200:
+                        print(f"✅ Файл {file_name} отправлен по URL")
+                        success = True
+                    else:
+                        print(f"⚠️ Не удалось отправить по URL: {response.text}")
                         
-                        # Скачиваем файл
+                        # Последняя попытка - прямая отправка (если ещё не пробовали)
                         if isinstance(file_info, str):
-                            # Файл на локальном сервере
-                            local_file_path = os.path.join(UPLOADS_DIR, f"order_{order_id}", file_name)
-                            if os.path.exists(local_file_path):
-                                with open(local_file_path, 'rb') as file_data:
-                                    files = {'document': (file_name, file_data)}
-                                    data = {
-                                        'chat_id': user_chat_id,
-                                        'caption': f"📎 {file_name}"
-                                    }
-                                    response = requests.post(send_document_url, files=files, data=data, timeout=60)
-                                    
-                                    if response.status_code == 200:
-                                        print(f"✅ Файл {file_name} отправлен напрямую")
-                                        sent_count += 1
-                                    else:
-                                        print(f"❌ Ошибка прямой отправки файла {file_name}: {response.text}")
-                            else:
-                                print(f"❌ Локальный файл не найден: {local_file_path}")
-                        else:
-                            print(f"❌ Альтернативный метод не поддерживается для URL: {file_url}")
-                            
-                    except Exception as alt_e:
-                        print(f"❌ Ошибка альтернативного метода для {file_name}: {alt_e}")
+                            print(f"🔄 Последняя попытка прямой отправки")
+                            success = await try_direct_file_upload(file_info, file_name, order_id, user_chat_id, send_document_url)
+                
+                if success:
+                    sent_count += 1
                     
             except Exception as e:
-                print(f"❌ Ошибка при отправке файла {file_name}: {e}")
+                print(f"❌ Критическая ошибка при отправке файла {file_name}: {e}")
+                # В критических случаях пробуем только прямую отправку
+                if isinstance(file_info, str):
+                    try:
+                        success = await try_direct_file_upload(file_info, file_name, order_id, user_chat_id, send_document_url)
+                        if success:
+                            sent_count += 1
+                    except Exception as final_e:
+                        print(f"❌ Финальная попытка не удалась для {file_name}: {final_e}")
         
         # Отправляем итоговое сообщение
         if sent_count > 0:
