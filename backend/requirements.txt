@@ -1,7 +1,0 @@
-﻿fastapi
-uvicorn[standard]
-supabase
-requests
-gunicorn
-python-multipart
-python-dotenv

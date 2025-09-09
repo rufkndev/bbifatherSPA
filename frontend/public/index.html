@@ -10,6 +10,18 @@
       content="BBI Father - Система заказов практических работ для студентов"
     />
     
+    <!-- Отключение кеширования для Telegram WebApp -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta name="cache-control" content="no-cache, no-store, must-revalidate, max-age=0" />
+    <meta name="expires" content="0" />
+    <meta name="pragma" content="no-cache" />
+    
+    <!-- Версия для принудительного обновления -->
+    <meta name="app-version" content="%REACT_APP_VERSION%" />
+    <meta name="build-time" content="%REACT_APP_BUILD_TIME%" />
+    
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,6 +31,79 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
     <title>BBI Father - Система заказов работ</title>
+    
+    <!-- Скрипт принудительного обновления для Telegram WebApp -->
+    <script>
+      // Принудительное обновление для Telegram WebApp
+      if (window.Telegram && window.Telegram.WebApp) {
+        // Добавляем версию в localStorage для отслеживания обновлений
+        const currentVersion = '%REACT_APP_VERSION%';
+        const storedVersion = localStorage.getItem('app-version');
+        
+        if (storedVersion && storedVersion !== currentVersion) {
+          console.log('Обнаружено обновление приложения, очищаем кеш');
+          
+          // Очищаем localStorage (кроме важных данных)
+          const importantKeys = ['telegramUser'];
+          const oldValues = {};
+          importantKeys.forEach(key => {
+            oldValues[key] = localStorage.getItem(key);
+          });
+          
+          localStorage.clear();
+          
+          // Восстанавливаем важные данные
+          importantKeys.forEach(key => {
+            if (oldValues[key]) {
+              localStorage.setItem(key, oldValues[key]);
+            }
+          });
+          
+          // Принудительная перезагрузка
+          window.location.reload(true);
+        }
+        
+        localStorage.setItem('app-version', currentVersion);
+      }
+    </script>
+    
+    <!-- Регистрация Service Worker для управления кешем -->
+    <script>
+      // Регистрируем Service Worker для Telegram WebApp
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+              console.log('Service Worker зарегистрирован:', registration.scope);
+              
+              // Проверяем обновления каждые 30 секунд
+              setInterval(() => {
+                registration.update();
+              }, 30000);
+              
+              // Слушаем обновления Service Worker
+              registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                newWorker.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    // Новая версия доступна
+                    console.log('Новая версия приложения доступна');
+                    
+                    // В Telegram WebApp принудительно перезагружаемся
+                    if (window.Telegram && window.Telegram.WebApp) {
+                      newWorker.postMessage({ type: 'SKIP_WAITING' });
+                      window.location.reload();
+                    }
+                  }
+                });
+              });
+            })
+            .catch(error => {
+              console.log('Ошибка регистрации Service Worker:', error);
+            });
+        });
+      }
+    </script>
   </head>
   <body>
     <noscript>Вам необходимо включить JavaScript для запуска этого приложения.</noscript>

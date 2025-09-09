@@ -8,6 +8,7 @@ import os
 import asyncio
 import logging
 import requests
+import time
 from typing import Optional
 
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
@@ -119,13 +120,20 @@ class BBIFatherBot:
         """Обработка команды /support"""
         await self.handle_support_request(update, context)
 
+    def get_webapp_url(self, username: Optional[str] = None) -> str:
+        """Создание URL для WebApp с cache-busting параметрами"""
+        timestamp = int(time.time())
+        base_url = f"{WEB_APP_URL}?telegram={username or 'user'}"
+        cache_busting_url = f"{base_url}&v={timestamp}&_cb={timestamp}"
+        return cache_busting_url
+
     def get_main_keyboard(self, username: Optional[str] = None) -> ReplyKeyboardMarkup:
         """Создание главной клавиатуры"""
         keyboard = [
             [
                 KeyboardButton(
                     "📱 Открыть приложение",
-                    web_app=WebAppInfo(url=f"{WEB_APP_URL}?telegram={username or 'user'}")
+                    web_app=WebAppInfo(url=self.get_webapp_url(username))
                 )
             ],
             [
