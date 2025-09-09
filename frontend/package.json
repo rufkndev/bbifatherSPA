@@ -21,7 +21,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "cross-env REACT_APP_VERSION=$(date +%s) REACT_APP_BUILD_TIME=$(date -u +\"%Y-%m-%dT%H:%M:%SZ\") react-scripts build",
+    "build": "REACT_APP_VERSION=$(date +%s) REACT_APP_BUILD_TIME=$(date -u +\"%Y-%m-%dT%H:%M:%SZ\") react-scripts build",
     "build:win": "set REACT_APP_VERSION=%date:~-4,4%%date:~-10,2%%date:~-7,2%_%time:~0,2%%time:~3,2% && set REACT_APP_BUILD_TIME=%date% %time% && react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
@@ -45,8 +45,7 @@
     ]
   },
   "devDependencies": {
-    "@types/jest": "^27.5.2",
-    "cross-env": "^7.0.3"
+    "@types/jest": "^27.5.2"
   },
   "proxy": "http://localhost:8000"
 }
