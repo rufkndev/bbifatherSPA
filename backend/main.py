@@ -5,7 +5,7 @@ import zipfile
 import tempfile
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
@@ -916,8 +916,18 @@ async def download_file(order_id: int, filename: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка скачивания файла: {str(e)}")
 
+# Utility функция для безопасного удаления временных файлов
+def safe_cleanup_file(filepath: str):
+    """Безопасное удаление временного файла"""
+    try:
+        if os.path.exists(filepath):
+            os.unlink(filepath)
+            print(f"🗑️ Временный файл удален: {filepath}")
+    except Exception as e:
+        print(f"⚠️ Не удалось удалить временный файл {filepath}: {e}")
+
 @app.get("/api/orders/{order_id}/download-all")
-async def download_all_files(order_id: int):
+async def download_all_files(order_id: int, background_tasks: BackgroundTasks):
     """Скачивание всех файлов заказа в zip архиве"""
     try:
         # Проверяем существование заказа и файлов
@@ -955,11 +965,13 @@ async def download_all_files(order_id: int):
             safe_title = "".join(c for c in order_title if c.isalnum() or c in (' ', '-', '_')).rstrip()
             zip_filename = f"Заказ_{order_id}_{safe_title[:30]}.zip"
             
+            # Добавляем задачу на очистку временного файла
+            background_tasks.add_task(safe_cleanup_file, temp_zip.name)
+            
             return FileResponse(
                 path=temp_zip.name,
                 filename=zip_filename,
-                media_type='application/zip',
-                background=lambda: os.unlink(temp_zip.name)  # Удаляем временный файл после отправки
+                media_type='application/zip'
             )
             
     except HTTPException:
