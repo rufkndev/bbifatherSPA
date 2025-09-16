@@ -55,43 +55,34 @@ function App() {
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
           // Компактный для мобильных
           '& .MuiToolbar-root': {
-            minHeight: { xs: 56, sm: 64 },
+            minHeight: { xs: 72, sm: 84 },
           }
         }}
       >
         <Container maxWidth="xl" disableGutters sx={{ px: { xs: 2, sm: 3 } }}>
           <Toolbar sx={{ py: { xs: 0.5, sm: 1 }, minHeight: 'inherit !important' }}>
-            <Box
-              component="img"
-              src="/logo.png"
-              alt="BBI Father"
-              sx={{
-                width: { xs: 28, sm: 32 },
-                height: { xs: 28, sm: 32 },
-                mr: { xs: 2, sm: 3 },
-                borderRadius: '8px',
-                objectFit: 'contain'
-              }}
-            />
-            
-            <Typography 
-              variant="h6"
-              component={Link}
-              to="/"
+            <Box 
+              component={Link} 
+              to="/" 
               sx={{ 
-                flexGrow: 1, 
-                fontWeight: 700,
-                textDecoration: 'none',
-                color: '#1e293b',
-                transition: 'all 0.2s ease',
-                fontSize: { xs: '1.1rem', sm: '1.25rem' },
-                '&:hover': { 
-                  color: '#2563eb',
-                }
+                display: 'flex', 
+                alignItems: 'center', 
+                mr: { xs: 2, sm: 3 },
+                flexGrow: 1,
+                textDecoration: 'none'
               }}
             >
-              BBI Father
-            </Typography>
+              <Box
+                component="img"
+                src="/logo.png"
+                alt="BBI Father"
+                sx={{
+                  height: { xs: 40, sm: 56 },
+                  width: 'auto',
+                  display: 'block'
+                }}
+              />
+            </Box>
             
             {/* Скрываем chip на мобильных для экономии места */}
             <Chip 
@@ -115,7 +106,7 @@ function App() {
 
       {/* Основной контент */}
       <Box sx={{ 
-        pt: { xs: 7, sm: 10 }, 
+        pt: { xs: 9, sm: 12 }, 
         minHeight: '100vh', 
         px: { xs: 1, sm: 2 } 
       }}>
