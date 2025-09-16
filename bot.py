@@ -58,8 +58,8 @@ class BBIFatherBot:
         """Обработка команды /start"""
         user = update.effective_user
         
-        # Сохраняем chat_id пользователя для отправки уведомлений
-        await self.save_user_chat_id(user)
+        # Сохраняем chat_id пользователя для отправки уведомлений (без задержки ответа)
+        asyncio.create_task(self.save_user_chat_id(user))
         
         welcome_text = f"""
 👋 Привет, {user.first_name}!
@@ -161,11 +161,13 @@ class BBIFatherBot:
             api_url = API_BASE_URL
             if not api_url.endswith('/api'):
                 api_url = api_url.rstrip('/') + '/api'
-            
+
             full_url = f"{api_url}/save-chat-id"
             logger.info(f"🌐 Отправляем chat_id на: {full_url}")
-            
-            response = requests.post(
+
+            # Выполняем блокирующий HTTP-запрос в отдельном потоке, чтобы не блокировать event loop
+            response = await asyncio.to_thread(
+                requests.post,
                 full_url,
                 json={
                     "telegram_username": user.username,
@@ -175,12 +177,12 @@ class BBIFatherBot:
                 },
                 timeout=5
             )
-            
+
             if response.status_code == 200:
                 logger.info(f"✅ Chat ID сохранен для @{user.username}")
             else:
                 logger.warning(f"⚠️ Не удалось сохранить chat_id: {response.text}")
-                
+
         except Exception as e:
             logger.error(f"❌ Ошибка сохранения chat_id: {e}")
 
@@ -251,8 +253,8 @@ class BBIFatherBot:
         
         logger.info(f"📨 Получено сообщение: '{message_text}' от {user.username or user.first_name}")
         
-        # Сохраняем chat_id пользователя для отправки уведомлений
-        await self.save_user_chat_id(user)
+        # Сохраняем chat_id пользователя для отправки уведомлений (без задержки ответа)
+        asyncio.create_task(self.save_user_chat_id(user))
         
         # Если пользователь ждет ответа поддержки
         if context.user_data.get('waiting_for_support'):

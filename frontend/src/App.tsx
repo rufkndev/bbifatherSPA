@@ -61,19 +61,18 @@ function App() {
       >
         <Container maxWidth="xl" disableGutters sx={{ px: { xs: 2, sm: 3 } }}>
           <Toolbar sx={{ py: { xs: 0.5, sm: 1 }, minHeight: 'inherit !important' }}>
-            <Box 
-              sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
+            <Box
+              component="img"
+              src="/logo.png"
+              alt="BBI Father"
+              sx={{
+                width: { xs: 28, sm: 32 },
+                height: { xs: 28, sm: 32 },
                 mr: { xs: 2, sm: 3 },
-                background: '#2563eb',
                 borderRadius: '8px',
-                p: { xs: 1, sm: 1.5 },
-                color: 'white'
+                objectFit: 'contain'
               }}
-            >
-              <School sx={{ fontSize: { xs: 20, sm: 24 } }} />
-            </Box>
+            />
             
             <Typography 
               variant="h6"
