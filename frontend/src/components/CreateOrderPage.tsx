@@ -682,20 +682,22 @@ const CreateOrderPage: React.FC = () => {
                       </Box>
                       
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Chip 
-                          label={subject.works.length > 0 ? `${subject.works.length} работ` : 'Введите работы'}
-                          size="small"
-                          sx={{ 
-                            background: 'rgba(37, 99, 235, 0.1)',
-                            color: '#2563eb',
-                            fontWeight: 500
-                          }}
-                        />
-                        {!subject.priceNote && (
-                          <Typography variant="h6" sx={{ fontWeight: 700, color: '#059669' }}>
-                            от 1000 ₽
-                          </Typography>
+                        {subject.works.length > 0 ? (
+                          <Chip 
+                            label={`${subject.works.length} работ`}
+                            size="small"
+                            sx={{ 
+                              background: 'rgba(37, 99, 235, 0.1)',
+                              color: '#2563eb',
+                              fontWeight: 500
+                            }}
+                          />
+                        ) : (
+                          <Box /> // Пустое место вместо чипа для предметов без готовых работ
                         )}
+                        <Typography variant="h6" sx={{ fontWeight: 700, color: '#059669' }}>
+                          от 1000 ₽
+                        </Typography>
                       </Box>
                     </CardContent>
                   </Card>
