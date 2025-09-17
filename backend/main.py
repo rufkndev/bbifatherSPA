@@ -710,14 +710,21 @@ async def create_order(request: Request):
             student_id = new_student.data[0]['id']
             print(f"👤 Создан новый студент ID: {student_id}")
         
-        # Проверяем существование предмета
-        subject_id = int(data['subject_id'])
-        subject = supabase.table('subjects').select('id, name').eq('id', subject_id).limit(1).execute()
+        # Проверяем существование предмета (может быть null для кастомных заказов)
+        subject_id = data.get('subject_id')
+        subject_name = "Кастомный предмет"
         
-        if not subject.data or len(subject.data) == 0:
-            raise HTTPException(status_code=400, detail=f"Предмет с ID {subject_id} не найден")
-        
-        print(f"📚 Предмет: {subject.data[0]['name']} (ID: {subject_id})")
+        if subject_id is not None:
+            subject_id = int(subject_id)
+            subject = supabase.table('subjects').select('id, name').eq('id', subject_id).limit(1).execute()
+            
+            if not subject.data or len(subject.data) == 0:
+                raise HTTPException(status_code=400, detail=f"Предмет с ID {subject_id} не найден")
+            
+            subject_name = subject.data[0]['name']
+            print(f"📚 Предмет: {subject_name} (ID: {subject_id})")
+        else:
+            print(f"📚 Кастомный заказ без привязки к предмету")
         
         # Подготавливаем данные заказа
         actual_price = data.get('actual_price', 0.0)
