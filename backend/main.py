@@ -710,7 +710,7 @@ async def create_order(request: Request):
             student_id = new_student.data[0]['id']
             print(f"👤 Создан новый студент ID: {student_id}")
         
-        # Проверяем существование предмета (может быть null для кастомных заказов)
+        # Проверяем существование предмета или создаем кастомный
         subject_id = data.get('subject_id')
         subject_name = "Кастомный предмет"
         
@@ -724,7 +724,22 @@ async def create_order(request: Request):
             subject_name = subject.data[0]['name']
             print(f"📚 Предмет: {subject_name} (ID: {subject_id})")
         else:
-            print(f"📚 Кастомный заказ без привязки к предмету")
+            # Для кастомных заказов создаем или находим специальный предмет
+            print(f"📚 Кастомный заказ - ищем/создаем специальный предмет")
+            custom_subject = supabase.table('subjects').select('id').eq('name', 'Кастомный предмет').limit(1).execute()
+            
+            if custom_subject.data and len(custom_subject.data) > 0:
+                subject_id = custom_subject.data[0]['id']
+                print(f"✅ Найден кастомный предмет ID: {subject_id}")
+            else:
+                # Создаем кастомный предмет
+                new_custom_subject = supabase.table('subjects').insert({
+                    'name': 'Кастомный предмет',
+                    'description': 'Предмет для кастомных заказов',
+                    'price': 0.0
+                }).execute()
+                subject_id = new_custom_subject.data[0]['id']
+                print(f"✅ Создан кастомный предмет ID: {subject_id}")
         
         # Подготавливаем данные заказа
         actual_price = data.get('actual_price', 0.0)

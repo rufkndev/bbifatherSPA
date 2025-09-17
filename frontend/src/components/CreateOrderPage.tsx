@@ -546,7 +546,7 @@ const CreateOrderPage: React.FC = () => {
                       </Box>
                       
                       <Typography variant="body2" sx={{ color: '#64748b' }}>
-                        {getSubjectsByCourseAndSemester(formData.courseId, semester).length} предметов
+                        {formData.courseId === 1 ? 'от 1000 ₽' : `${getSubjectsByCourseAndSemester(formData.courseId, semester).length} предметов`}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -683,7 +683,7 @@ const CreateOrderPage: React.FC = () => {
                       
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Chip 
-                          label={subject.works.length > 0 ? `${subject.works.length} работ` : 'Кастомные работы'}
+                          label={subject.works.length > 0 ? `${subject.works.length} работ` : 'Введите работы'}
                           size="small"
                           sx={{ 
                             background: 'rgba(37, 99, 235, 0.1)',
@@ -691,9 +691,9 @@ const CreateOrderPage: React.FC = () => {
                             fontWeight: 500
                           }}
                         />
-                        {subject.basePrice && (
+                        {!subject.priceNote && (
                           <Typography variant="h6" sx={{ fontWeight: 700, color: '#059669' }}>
-                            от {subject.basePrice} ₽
+                            от 1000 ₽
                           </Typography>
                         )}
                       </Box>
@@ -786,38 +786,72 @@ const CreateOrderPage: React.FC = () => {
               Выберите работы - {selectedSubject.name}
             </Typography>
             
-            {/* Переключатель полного курса */}
-            <Box sx={{ mb: 3 }}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={formData.isFullCourse}
-                    onChange={(e) => setFormData(prev => ({ 
-                      ...prev, 
-                      isFullCourse: e.target.checked,
-                      selectedWorks: e.target.checked ? [] : prev.selectedWorks
-                    }))}
-                    color="primary"
-                  />
-                }
-                label={`Заказать весь курс (${selectedSubject.works.length} работ)`}
+            {/* Полный курс со скидкой */}
+            {selectedSubject.fullCourseDiscount && (
+              <Card 
                 sx={{ 
-                  '& .MuiFormControlLabel-label': { 
-                    fontSize: '1rem', 
-                    fontWeight: 500 
-                  } 
+                  mb: 3,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  border: formData.isFullCourse ? '2px solid #059669' : '1px solid #e2e8f0',
+                  background: formData.isFullCourse ? 'rgba(5, 150, 105, 0.05)' : '#ffffff',
+                  '&:hover': {
+                    border: '2px solid #059669',
+                    transform: 'translateY(-1px)'
+                  }
                 }}
-              />
-              
-              {formData.isFullCourse && selectedSubject.fullCourseDiscount && (
-                <Chip 
-                  label={`Скидка ${selectedSubject.fullCourseDiscount}%`}
-                  color="success"
-                  size="small"
-                  sx={{ ml: 2 }}
-                />
-              )}
-            </Box>
+                onClick={() => setFormData(prev => ({ 
+                  ...prev, 
+                  isFullCourse: !prev.isFullCourse,
+                  selectedWorks: !prev.isFullCourse ? [] : prev.selectedWorks
+                }))}
+              >
+                <CardContent sx={{ p: 3 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <Checkbox
+                      checked={formData.isFullCourse}
+                      color="success"
+                      sx={{ mr: 2 }}
+                    />
+                    <Box sx={{ flexGrow: 1 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: '#059669' }}>
+                        Весь курс ({selectedSubject.works.length} работ)
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#64748b' }}>
+                        Скидка {selectedSubject.fullCourseDiscount}% при заказе всех работ
+                      </Typography>
+                    </Box>
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography 
+                      variant="h6" 
+                      sx={{ 
+                        textDecoration: 'line-through',
+                        color: '#64748b',
+                        fontWeight: 500
+                      }}
+                    >
+                      {selectedSubject.works.reduce((sum, work) => sum + (work.price || 0), 0)} ₽
+                    </Typography>
+                    <Typography 
+                      variant="h5" 
+                      sx={{ 
+                        fontWeight: 700, 
+                        color: '#059669'
+                      }}
+                    >
+                      {calculateFullCoursePrice(selectedSubject)} ₽
+                    </Typography>
+                    <Chip 
+                      label={`-${selectedSubject.fullCourseDiscount}%`}
+                      color="success"
+                      size="small"
+                    />
+                  </Box>
+                </CardContent>
+              </Card>
+            )}
 
             {!formData.isFullCourse && (
               <Grid container spacing={2}>
