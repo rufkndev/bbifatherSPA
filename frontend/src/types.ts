@@ -52,7 +52,7 @@ export interface Order {
 
 export interface CreateOrderRequest {
   student: Student;
-  subject_id: number;
+  subject_id: number | null; // может быть null для кастомных заказов
   title: string;
   description: string;
   input_data: string;
