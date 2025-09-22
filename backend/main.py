@@ -307,7 +307,7 @@ async def save_chat_id_direct(request: Request):
     return await save_chat_id_handler(request)
 
 async def try_direct_file_upload(file_info, file_name: str, order_id: int, user_chat_id: str, send_document_url: str) -> bool:
-    """Попытка прямой отправки файла в Telegram"""
+    """Попытка прямой отправки файла в Telegram с проверкой размера"""
     try:
         print(f"🔄 Пробуем альтернативный метод для {file_name}")
         
@@ -317,13 +317,21 @@ async def try_direct_file_upload(file_info, file_name: str, order_id: int, user_
             print(f"📁 Ищем локальный файл: {local_file_path}")
             
             if os.path.exists(local_file_path):
-                print(f"📎 Отправляем файл напрямую: {file_name}")
+                # Проверяем размер файла (Telegram лимит 50MB)
+                file_size = os.path.getsize(local_file_path)
+                max_size = 50 * 1024 * 1024  # 50MB в байтах
+                
+                if file_size > max_size:
+                    print(f"⚠️ Файл {file_name} слишком большой ({file_size / 1024 / 1024:.1f}MB) для Telegram (лимит 50MB)")
+                    return False
+                
+                print(f"📎 Отправляем файл напрямую: {file_name} ({file_size / 1024 / 1024:.1f}MB)")
                 
                 with open(local_file_path, 'rb') as file_data:
                     files = {'document': (file_name, file_data)}
                     data = {
                         'chat_id': user_chat_id,
-                        'caption': f"📎 {file_name}"
+                        'caption': f"📎 {file_name} ({file_size / 1024 / 1024:.1f}MB)"
                     }
                     response = requests.post(send_document_url, files=files, data=data, timeout=90)
                     
@@ -407,6 +415,9 @@ async def send_files_to_telegram_handler(request: Request):
         
         # Отправляем каждый файл
         sent_count = 0
+        skipped_large_files = []
+        failed_files = []
+        
         for file_info in files:
             file_name = "unknown_file"  # Инициализируем переменную для безопасности
             try:
@@ -422,11 +433,25 @@ async def send_files_to_telegram_handler(request: Request):
                     file_name = file_info.get('name', 'file')
                 else:
                     print(f"⚠️ Неизвестный тип файла: {type(file_info)}")
+                    failed_files.append(file_name)
                     continue
                 
                 if not file_name:
                     print(f"❌ Пустое имя файла: {file_info}")
+                    failed_files.append("unnamed_file")
                     continue
+                
+                # Проверяем размер файла перед отправкой
+                if isinstance(file_info, str):
+                    local_file_path = os.path.join(UPLOADS_DIR, f"order_{order_id}", file_name)
+                    if os.path.exists(local_file_path):
+                        file_size = os.path.getsize(local_file_path)
+                        max_size = 50 * 1024 * 1024  # 50MB
+                        
+                        if file_size > max_size:
+                            print(f"⚠️ Файл {file_name} слишком большой ({file_size / 1024 / 1024:.1f}MB) для Telegram")
+                            skipped_large_files.append(f"{file_name} ({file_size / 1024 / 1024:.1f}MB)")
+                            continue
                 
                 print(f"📎 Отправляем файл: {file_name}")
                 
@@ -464,23 +489,43 @@ async def send_files_to_telegram_handler(request: Request):
                 
                 if success:
                     sent_count += 1
+                else:
+                    failed_files.append(file_name)
                     
             except Exception as e:
                 print(f"❌ Критическая ошибка при отправке файла {file_name}: {e}")
+                failed_files.append(file_name)
                 # В критических случаях пробуем только прямую отправку
                 if isinstance(file_info, str):
                     try:
                         success = await try_direct_file_upload(file_info, file_name, order_id, user_chat_id, send_document_url)
                         if success:
                             sent_count += 1
+                            failed_files.remove(file_name)  # Убираем из неудачных, если получилось
                     except Exception as final_e:
                         print(f"❌ Финальная попытка не удалась для {file_name}: {final_e}")
         
-        # Отправляем итоговое сообщение
+        # Формируем итоговое сообщение
+        final_message_parts = []
+        
         if sent_count > 0:
-            final_message = f"✅ Отправлено {sent_count} из {len(files)} файлов заказа #{order_id}"
-        else:
-            final_message = f"❌ Не удалось отправить файлы заказа #{order_id}"
+            final_message_parts.append(f"✅ Отправлено {sent_count} из {len(files)} файлов заказа #{order_id}")
+        
+        if skipped_large_files:
+            final_message_parts.append(f"⚠️ Пропущено {len(skipped_large_files)} больших файлов (>50MB):")
+            for file_info in skipped_large_files:
+                final_message_parts.append(f"   • {file_info}")
+            final_message_parts.append("💡 Большие файлы можно скачать через браузер в приложении")
+        
+        if failed_files:
+            final_message_parts.append(f"❌ Не удалось отправить {len(failed_files)} файлов:")
+            for file_name in failed_files:
+                final_message_parts.append(f"   • {file_name}")
+        
+        if sent_count == 0:
+            final_message_parts.append("💡 Попробуйте скачать файлы через браузер в приложении")
+        
+        final_message = "\n".join(final_message_parts)
         
         final_payload = {
             'chat_id': user_chat_id,
@@ -491,10 +536,17 @@ async def send_files_to_telegram_handler(request: Request):
         requests.post(telegram_url, json=final_payload, timeout=10)
         
         return {
-            "status": "success", 
-            "message": f"Отправлено {sent_count} из {len(files)} файлов",
+            "status": "success" if sent_count > 0 else "partial_success" if sent_count == 0 and len(files) > 0 else "error",
+            "message": final_message,
             "sent_count": sent_count,
-            "total_files": len(files)
+            "total_files": len(files),
+            "skipped_large_files": len(skipped_large_files),
+            "failed_files": len(failed_files),
+            "details": {
+                "sent_files": sent_count,
+                "large_files_skipped": skipped_large_files,
+                "failed_files": failed_files
+            }
         }
         
     except HTTPException:
@@ -883,8 +935,31 @@ async def upload_order_files(order_id: int, files: list[UploadFile] = File(...))
         upload_dir = os.path.join(UPLOADS_DIR, f"order_{order_id}")
         os.makedirs(upload_dir, exist_ok=True)
         
+        # Разрешенные типы файлов (можно расширить по необходимости)
+        ALLOWED_EXTENSIONS = {
+            # Документы
+            '.pdf', '.doc', '.docx', '.txt', '.rtf', '.odt',
+            # Таблицы  
+            '.xls', '.xlsx', '.csv', '.ods',
+            # Презентации
+            '.ppt', '.pptx', '.odp',
+            # Архивы
+            '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
+            # Изображения
+            '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.tiff',
+            # Исходный код
+            '.py', '.js', '.html', '.css', '.json', '.xml', '.yaml', '.yml',
+            '.cpp', '.c', '.java', '.php', '.rb', '.go', '.rs', '.swift',
+            # Другие
+            '.md', '.log'
+        }
+        
+        # Максимальный размер файла (100MB)
+        MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB в байтах
+        
         # Сохраняем загруженные файлы
         saved_files = []
+        rejected_files = []
         
         if not files or len(files) == 0:
             # Если файлы не загружены, создаем демонстрационные
@@ -944,17 +1019,64 @@ startxref 467
                 saved_files.append(filename)
                 
         else:
-            # Сохраняем реальные загруженные файлы
+            # Сохраняем реальные загруженные файлы с проверками
             for file in files:
-                if file.filename:
-                    file_path = os.path.join(upload_dir, file.filename)
-                    
-                    # Сохраняем файл на диск
+                if not file.filename:
+                    rejected_files.append({"filename": "unnamed_file", "reason": "Отсутствует имя файла"})
+                    continue
+                
+                # Проверяем расширение файла
+                file_extension = os.path.splitext(file.filename.lower())[1]
+                if file_extension not in ALLOWED_EXTENSIONS:
+                    rejected_files.append({
+                        "filename": file.filename, 
+                        "reason": f"Недопустимый тип файла: {file_extension}"
+                    })
+                    continue
+                
+                # Читаем файл в память для проверки размера
+                file_content = await file.read()
+                file_size = len(file_content)
+                
+                # Проверяем размер файла
+                if file_size > MAX_FILE_SIZE:
+                    rejected_files.append({
+                        "filename": file.filename, 
+                        "reason": f"Файл слишком большой: {file_size / 1024 / 1024:.1f}MB (максимум 100MB)"
+                    })
+                    continue
+                
+                # Проверяем имя файла на безопасность (удаляем опасные символы)
+                safe_filename = "".join(c for c in file.filename if c.isalnum() or c in (' ', '-', '_', '.')).rstrip()
+                if not safe_filename or safe_filename != file.filename:
+                    safe_filename = f"file_{len(saved_files)+1}{file_extension}"
+                    print(f"⚠️ Переименован файл {file.filename} в {safe_filename} для безопасности")
+                
+                # Сохраняем файл на диск
+                file_path = os.path.join(upload_dir, safe_filename)
+                
+                # Если файл с таким именем уже существует, добавляем номер
+                counter = 1
+                original_safe_filename = safe_filename
+                while os.path.exists(file_path):
+                    name, ext = os.path.splitext(original_safe_filename)
+                    safe_filename = f"{name}_{counter}{ext}"
+                    file_path = os.path.join(upload_dir, safe_filename)
+                    counter += 1
+                
+                try:
                     with open(file_path, "wb") as buffer:
-                        shutil.copyfileobj(file.file, buffer)
+                        buffer.write(file_content)
                     
-                    saved_files.append(file.filename)
-                    print(f"💾 Сохранен файл: {file.filename} для заказа {order_id}")
+                    saved_files.append(safe_filename)
+                    print(f"💾 Сохранен файл: {safe_filename} ({file_size / 1024 / 1024:.1f}MB) для заказа {order_id}")
+                    
+                except Exception as save_error:
+                    rejected_files.append({
+                        "filename": file.filename, 
+                        "reason": f"Ошибка сохранения: {str(save_error)}"
+                    })
+                    continue
         
         # Обновляем информацию о файлах в базе данных
         supabase.table('orders').update({
@@ -965,9 +1087,19 @@ startxref 467
         
         print(f"📎 Файлы добавлены к заказу {order_id}: {saved_files}")
         
-        # Получаем обновленный заказ и отправляем уведомление пользователю
+        # Получаем обновленный заказ
         updated_order = get_order(order_id)
-        await send_status_notification_to_user(updated_order, 'completed')
+        
+        # Добавляем информацию о результатах загрузки
+        updated_order['upload_results'] = {
+            "saved_files": len(saved_files),
+            "rejected_files": len(rejected_files),
+            "rejected_details": rejected_files
+        }
+        
+        # Отправляем уведомление пользователю только если есть сохраненные файлы
+        if saved_files:
+            await send_status_notification_to_user(updated_order, 'completed')
         
         return updated_order
         
@@ -975,6 +1107,41 @@ startxref 467
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки файлов: {str(e)}")
+
+@app.get("/api/file-upload-info")
+async def get_file_upload_info():
+    """Получение информации о поддерживаемых типах файлов и ограничениях"""
+    return {
+        "allowed_extensions": [
+            # Документы
+            '.pdf', '.doc', '.docx', '.txt', '.rtf', '.odt',
+            # Таблицы  
+            '.xls', '.xlsx', '.csv', '.ods',
+            # Презентации
+            '.ppt', '.pptx', '.odp',
+            # Архивы
+            '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
+            # Изображения
+            '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.tiff',
+            # Исходный код
+            '.py', '.js', '.html', '.css', '.json', '.xml', '.yaml', '.yml',
+            '.cpp', '.c', '.java', '.php', '.rb', '.go', '.rs', '.swift',
+            # Другие
+            '.md', '.log'
+        ],
+        "max_file_size_mb": 100,
+        "max_file_size_bytes": 100 * 1024 * 1024,
+        "telegram_max_size_mb": 50,
+        "categories": {
+            "documents": ['.pdf', '.doc', '.docx', '.txt', '.rtf', '.odt'],
+            "spreadsheets": ['.xls', '.xlsx', '.csv', '.ods'],
+            "presentations": ['.ppt', '.pptx', '.odp'],
+            "archives": ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2'],
+            "images": ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.tiff'],
+            "code": ['.py', '.js', '.html', '.css', '.json', '.xml', '.yaml', '.yml', '.cpp', '.c', '.java', '.php', '.rb', '.go', '.rs', '.swift'],
+            "other": ['.md', '.log']
+        }
+    }
 
 @app.get("/api/orders/{order_id}/download/{filename}")
 async def download_file(order_id: int, filename: str):
@@ -1012,6 +1179,30 @@ async def download_file(order_id: int, filename: str):
             media_type = 'application/pdf'
         elif filename.endswith('.txt'):
             media_type = 'text/plain; charset=utf-8'
+        elif filename.endswith('.zip'):
+            media_type = 'application/zip'
+        elif filename.endswith('.rar'):
+            media_type = 'application/x-rar-compressed'
+        elif filename.endswith('.7z'):
+            media_type = 'application/x-7z-compressed'
+        elif filename.endswith('.doc'):
+            media_type = 'application/msword'
+        elif filename.endswith('.xls'):
+            media_type = 'application/vnd.ms-excel'
+        elif filename.endswith('.xlsx'):
+            media_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        elif filename.endswith('.ppt'):
+            media_type = 'application/vnd.ms-powerpoint'
+        elif filename.endswith('.pptx'):
+            media_type = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+        elif filename.endswith('.png'):
+            media_type = 'image/png'
+        elif filename.endswith('.jpg') or filename.endswith('.jpeg'):
+            media_type = 'image/jpeg'
+        elif filename.endswith('.gif'):
+            media_type = 'image/gif'
+        elif filename.endswith('.svg'):
+            media_type = 'image/svg+xml'
         else:
             media_type = 'application/octet-stream'
         
