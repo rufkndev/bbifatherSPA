@@ -143,12 +143,12 @@ export const useTelegramWebApp = () => {
   useEffect(() => {
     if (webApp) {
       // Инициализируем WebApp
-      webApp.ready();
-      webApp.expand();
+      try { webApp.ready(); } catch { /* старые клиенты */ }
+      try { webApp.expand(); } catch { /* старые клиенты */ }
       
-      // Настраиваем внешний вид
-      webApp.setHeaderColor('#2563eb');
-      webApp.setBackgroundColor('#f8fafc');
+      // Настраиваем внешний вид (защита от WebAppMethodUnsupported)
+      try { webApp.setHeaderColor('#2563eb'); } catch { /* noop */ }
+      try { webApp.setBackgroundColor('#f8fafc'); } catch { /* noop */ }
       
       // Получаем данные пользователя
       if (webApp.initDataUnsafe.user) {
@@ -165,15 +165,15 @@ export const useTelegramWebApp = () => {
       }
       
       // Устанавливаем цветовую схему
-      setColorScheme(webApp.colorScheme);
+      try { setColorScheme(webApp.colorScheme); } catch { /* noop */ }
       
       setIsLoaded(true);
     }
   }, [webApp]);
 
   const showAlert = (message: string, callback?: () => void) => {
-    if (webApp) {
-      webApp.showAlert(message, callback);
+    if (webApp && typeof webApp.showAlert === 'function') {
+      try { webApp.showAlert(message, callback); } catch { window.alert(message); callback?.(); }
     } else {
       // Fallback для обычного браузера
       window.alert(message);
@@ -182,8 +182,8 @@ export const useTelegramWebApp = () => {
   };
 
   const showConfirm = (message: string, callback?: (confirmed: boolean) => void) => {
-    if (webApp) {
-      webApp.showConfirm(message, callback);
+    if (webApp && typeof webApp.showConfirm === 'function') {
+      try { webApp.showConfirm(message, callback); } catch { const confirmed = window.confirm(message); callback?.(confirmed); }
     } else {
       // Fallback для обычного браузера
       const confirmed = window.confirm(message);
@@ -195,34 +195,34 @@ export const useTelegramWebApp = () => {
     impactLight: () => webApp?.HapticFeedback.impactOccurred('light'),
     impactMedium: () => webApp?.HapticFeedback.impactOccurred('medium'),
     impactHeavy: () => webApp?.HapticFeedback.impactOccurred('heavy'),
-    success: () => webApp?.HapticFeedback.notificationOccurred('success'),
-    error: () => webApp?.HapticFeedback.notificationOccurred('error'),
-    warning: () => webApp?.HapticFeedback.notificationOccurred('warning'),
+    success: () => { try { webApp?.HapticFeedback.notificationOccurred('success'); } catch {} },
+    error: () => { try { webApp?.HapticFeedback.notificationOccurred('error'); } catch {} },
+    warning: () => { try { webApp?.HapticFeedback.notificationOccurred('warning'); } catch {} },
     selectionChanged: () => webApp?.HapticFeedback.selectionChanged(),
   };
 
   const mainButton = {
-    setText: (text: string) => webApp?.MainButton.setText(text),
+    setText: (text: string) => { try { webApp?.MainButton.setText(text); } catch {} },
     show: () => webApp?.MainButton.show(),
     hide: () => webApp?.MainButton.hide(),
     enable: () => webApp?.MainButton.enable(),
     disable: () => webApp?.MainButton.disable(),
     showProgress: () => webApp?.MainButton.showProgress(),
     hideProgress: () => webApp?.MainButton.hideProgress(),
-    onClick: (callback: () => void) => webApp?.MainButton.onClick(callback),
-    offClick: (callback: () => void) => webApp?.MainButton.offClick(callback),
+    onClick: (callback: () => void) => { try { webApp?.MainButton.onClick(callback); } catch {} },
+    offClick: (callback: () => void) => { try { webApp?.MainButton.offClick(callback); } catch {} },
   };
 
   const backButton = {
-    show: () => webApp?.BackButton.show(),
-    hide: () => webApp?.BackButton.hide(),
-    onClick: (callback: () => void) => webApp?.BackButton.onClick(callback),
-    offClick: (callback: () => void) => webApp?.BackButton.offClick(callback),
+    show: () => { try { webApp?.BackButton.show(); } catch {} },
+    hide: () => { try { webApp?.BackButton.hide(); } catch {} },
+    onClick: (callback: () => void) => { try { webApp?.BackButton.onClick(callback); } catch {} },
+    offClick: (callback: () => void) => { try { webApp?.BackButton.offClick(callback); } catch {} },
   };
 
   const close = () => {
     if (webApp) {
-      webApp.close();
+      try { webApp.close(); } catch { window.close(); }
     } else {
       // Fallback для обычного браузера
       window.close();
@@ -234,16 +234,16 @@ export const useTelegramWebApp = () => {
   };
 
   const openTelegramLink = (url: string) => {
-    if (webApp) {
-      webApp.openTelegramLink(url);
+    if (webApp && typeof webApp.openTelegramLink === 'function') {
+      try { webApp.openTelegramLink(url); } catch { window.open(url, '_blank'); }
     } else {
       window.open(url, '_blank');
     }
   };
 
   const openLink = (url: string, options?: { tryInstantView?: boolean }) => {
-    if (webApp) {
-      webApp.openLink(url, { try_instant_view: options?.tryInstantView });
+    if (webApp && typeof webApp.openLink === 'function') {
+      try { webApp.openLink(url, { try_instant_view: options?.tryInstantView }); } catch { window.open(url, '_blank'); }
     } else {
       window.open(url, '_blank');
     }

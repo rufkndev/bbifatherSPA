@@ -585,6 +585,7 @@ const AdminPage: React.FC = () => {
                       type="file"
                       hidden
                       multiple
+                      accept=".pdf,.doc,.docx,.txt,.rtf,.odt,.xls,.xlsx,.csv,.ods,.ppt,.pptx,.odp,.zip,.rar,.7z,.tar,.gz,.bz2,.jpg,.jpeg,.png,.gif,.bmp,.svg,.tiff,.py,.js,.html,.css,.json,.xml,.yaml,.yml,.cpp,.c,.java,.php,.rb,.go,.rs,.swift,.md,.log"
                       onChange={handleFileUpload}
                     />
                   </Button>

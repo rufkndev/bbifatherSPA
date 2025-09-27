@@ -232,6 +232,7 @@ const CreateOrderPage: React.FC = () => {
 
   const handleSubmit = async () => {
     setError('');
+    if (loading) return; // защита от двойного клика
     setLoading(true);
 
     try {

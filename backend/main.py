@@ -3,7 +3,8 @@ import os
 import shutil
 import zipfile
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
+import urllib.parse
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -425,8 +426,9 @@ async def send_files_to_telegram_handler(request: Request):
                 if isinstance(file_info, str):
                     # Если file_info это строка, то это имя файла
                     file_name = file_info
-                    # Создаем URL для файла на основе имени
-                    file_url = f"{PUBLIC_BASE_URL}/api/orders/{order_id}/download/{file_name}"
+                    # Создаем URL для файла на основе имени (кодируем для безопасности)
+                    encoded_name = urllib.parse.quote(file_name)
+                    file_url = f"{PUBLIC_BASE_URL}/api/orders/{order_id}/download/{encoded_name}"
                 elif isinstance(file_info, dict):
                     # Если file_info это словарь, извлекаем URL и имя
                     file_url = file_info.get('url')
@@ -799,6 +801,25 @@ async def create_order(request: Request):
         is_full_course = data.get('is_full_course', False)
         
         print(f"💰 Стоимость заказа: {actual_price} ₽")
+
+        # Идемпотентность: если аналогичный заказ уже создан недавно, возвращаем его
+        try:
+            window_start_iso = (datetime.utcnow() - timedelta(minutes=2)).isoformat()
+            dup_check = supabase.table('orders').select('id, created_at') \
+                .eq('student_id', student_id) \
+                .eq('subject_id', subject_id) \
+                .eq('title', data['title']) \
+                .eq('deadline', data['deadline']) \
+                .gte('created_at', window_start_iso) \
+                .order('created_at', desc=True) \
+                .limit(1) \
+                .execute()
+            if dup_check.data and len(dup_check.data) > 0:
+                existing_id = dup_check.data[0]['id']
+                print(f"🔁 Найден дубликат заказа за последние 2 минуты. Возвращаем ID: {existing_id}")
+                return get_order(existing_id)
+        except Exception as e:
+            print(f"⚠️ Ошибка проверки идемпотентности: {e}")
         
         # Создаем заказ
         order_data = {
@@ -927,13 +948,23 @@ def mark_order_as_paid(order_id: int):
 async def upload_order_files(order_id: int, files: list[UploadFile] = File(...)):
     try:
         # Проверяем существование заказа
-        order_check = supabase.table('orders').select('id, title, status').eq('id', order_id).single().execute()
+        order_check = supabase.table('orders').select('id, title, status, files').eq('id', order_id).single().execute()
         if not order_check.data:
             raise HTTPException(status_code=404, detail="Заказ не найден")
         
         # Создаем папку для файлов заказа
         upload_dir = os.path.join(UPLOADS_DIR, f"order_{order_id}")
         os.makedirs(upload_dir, exist_ok=True)
+        
+        # Уже сохраненные файлы для дополнения
+        existing_files: list[str] = []
+        try:
+            raw_files = order_check.data.get('files')
+            if raw_files:
+                existing_files = json.loads(raw_files) if isinstance(raw_files, str) else list(raw_files)
+        except Exception as e:
+            print(f"⚠️ Не удалось распарсить существующие файлы: {e}")
+            existing_files = []
         
         # Разрешенные типы файлов (можно расширить по необходимости)
         ALLOWED_EXTENSIONS = {
@@ -1078,9 +1109,10 @@ startxref 467
                     })
                     continue
         
-        # Обновляем информацию о файлах в базе данных
+        # Обновляем информацию о файлах в базе данных (добавляем к существующим)
+        all_files = existing_files + saved_files
         supabase.table('orders').update({
-            'files': json.dumps(saved_files),
+            'files': json.dumps(all_files),
             'status': 'completed',
             'updated_at': datetime.now().isoformat()
         }).eq('id', order_id).execute()
