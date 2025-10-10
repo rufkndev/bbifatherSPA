@@ -126,12 +126,12 @@ const CreateOrderPage: React.FC = () => {
         }
         return formData.semesterId > 0;
       case 2: // Выбор предмета
-        if (formData.isCustom || formData.courseId === 1) {
+        if (formData.isCustom || formData.courseId === 1 || (formData.courseId === 2 && formData.semesterId === 3)) {
           return formData.customSubject.trim() !== '' && formData.customWorksList.length > 0;
         }
         return formData.subjectId !== '';
       case 3: // Выбор работ
-        if (formData.isCustom || formData.courseId === 1) {
+        if (formData.isCustom || formData.courseId === 1 || (formData.courseId === 2 && formData.semesterId === 3)) {
           return true; // Уже проверено на предыдущих шагах
         }
         const selectedSubject = getSubjectById(formData.subjectId);
@@ -144,7 +144,8 @@ const CreateOrderPage: React.FC = () => {
           formData.studentName.trim() !== '' &&
           formData.studentGroup.trim() !== '' &&
           formData.studentTelegram.trim() !== '' &&
-          formData.deadline.trim() !== ''
+          formData.deadline.trim() !== '' &&
+          formData.inputData.trim() !== ''
         );
       case 5: // Подтверждение
         return true;
@@ -158,9 +159,9 @@ const CreateOrderPage: React.FC = () => {
       // Логика пропуска шагов для кастомных работ и 1 курса
       if (activeStep === 0 && formData.isCustom) {
         setActiveStep(1); // Переходим к кастомной форме
-      } else if (activeStep === 1 && formData.courseId === 1) {
+      } else if (activeStep === 1 && (formData.courseId === 1 || (formData.courseId === 2 && formData.semesterId === 3))) {
         setActiveStep(2); // Переходим к кастомной форме предмета для 1 курса
-      } else if ((activeStep === 2 && formData.courseId === 1) || (activeStep === 1 && formData.isCustom)) {
+      } else if ((activeStep === 2 && (formData.courseId === 1 || (formData.courseId === 2 && formData.semesterId === 3))) || (activeStep === 1 && formData.isCustom)) {
         setActiveStep(4); // Пропускаем выбор работ, переходим к данным студента
       } else if (activeStep === 2 && formData.isCustom) {
         setActiveStep(4); // Пропускаем выбор работ для кастомных заказов
@@ -172,13 +173,13 @@ const CreateOrderPage: React.FC = () => {
 
   const handleBack = () => {
     // Логика возврата с учетом пропущенных шагов
-    if (activeStep === 4 && (formData.isCustom || formData.courseId === 1)) {
+    if (activeStep === 4 && (formData.isCustom || formData.courseId === 1 || (formData.courseId === 2 && formData.semesterId === 3))) {
       if (formData.isCustom) {
         setActiveStep(1); // Возвращаемся к кастомной форме
-      } else if (formData.courseId === 1) {
+      } else if (formData.courseId === 1 || (formData.courseId === 2 && formData.semesterId === 3)) {
         setActiveStep(2); // Возвращаемся к форме предмета для 1 курса
       }
-    } else if (activeStep === 2 && formData.courseId === 1) {
+    } else if (activeStep === 2 && (formData.courseId === 1 || (formData.courseId === 2 && formData.semesterId === 3))) {
       setActiveStep(1); // Возвращаемся к выбору семестра
     } else if (activeStep === 1 && formData.isCustom) {
       setActiveStep(0); // Возвращаемся к выбору курса
@@ -195,8 +196,8 @@ const CreateOrderPage: React.FC = () => {
     const selectedSubject = getSubjectById(formData.subjectId);
     if (!selectedSubject) return 0;
     
-    // Если это предмет с кастомной формой или без цен, возвращаем 0
-    if (selectedSubject.isCustomForm || !selectedSubject.basePrice) {
+    // Если это предмет с кастомной формой, возвращаем 0
+    if (selectedSubject.isCustomForm) {
       return 0;
     }
     
@@ -245,7 +246,7 @@ const CreateOrderPage: React.FC = () => {
         description = formData.customWorksList.map((work, index) => 
           `Работа ${index + 1}: ${work.title}\nОписание: ${work.description}`
         ).join('\n\n');
-      } else if (formData.courseId === 1) {
+      } else if (formData.courseId === 1 || (formData.courseId === 2 && formData.semesterId === 3)) {
         title = `${getSemesterName(formData.courseId, formData.semesterId)} - ${formData.customSubject}`;
         description = formData.customWorksList.map((work, index) => 
           `Работа ${index + 1}: ${work.title}\nОписание: ${work.description}`
@@ -294,7 +295,11 @@ const CreateOrderPage: React.FC = () => {
         deadline: formData.deadline,
         selected_works: formData.selectedWorks,
         is_full_course: formData.isFullCourse,
-        custom_subject: formData.isCustom ? formData.customSubject : (formData.courseId === 1 ? formData.customSubject : undefined),
+        custom_subject: formData.isCustom 
+          ? formData.customSubject 
+          : ((formData.courseId === 1 || (formData.courseId === 2 && formData.semesterId === 3)) 
+            ? formData.customSubject 
+            : undefined),
         custom_work: formData.isCustom ? formData.customWork : undefined,
         actual_price: getTotalPrice() || 0,
       };
@@ -558,7 +563,7 @@ const CreateOrderPage: React.FC = () => {
         );
 
       case 2:
-        if (formData.courseId === 1) {
+        if (formData.courseId === 1 || (formData.courseId === 2 && formData.semesterId === 3)) {
           // Для 1 курса - кастомная форма
           return (
             <Box>
@@ -930,7 +935,7 @@ const CreateOrderPage: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="Ваше имя"
+                  label="Ваше ФИО"
                   value={formData.studentName}
                   onChange={(e) => setFormData(prev => ({ ...prev, studentName: e.target.value }))}
                   variant="outlined"
@@ -972,18 +977,19 @@ const CreateOrderPage: React.FC = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Исходные данные (если есть)"
+                  label="Индивидуальная информация (предприятие, бизнес-процесс, предметная область)"
                   value={formData.inputData}
                   onChange={(e) => setFormData(prev => ({ ...prev, inputData: e.target.value }))}
                   variant="outlined"
                   multiline
                   rows={3}
+                  required
                 />
               </Grid>
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Номер варианта или дополнительная информация"
+                  label="Дополнительная информация"
                   value={formData.variantInfo}
                   onChange={(e) => setFormData(prev => ({ ...prev, variantInfo: e.target.value }))}
                   variant="outlined"
