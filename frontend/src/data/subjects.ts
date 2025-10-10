@@ -199,9 +199,9 @@ export const subjectsData: SubjectData[] = [
       { id: "digital-pr-3", title: "ПР 3", description: "Практическая работа №3 по цифровой экономике", price: 1250, estimatedDays: 1 },
       { id: "digital-pr-4", title: "ПР 4", description: "Практическая работа №4 по цифровой экономике", price: 1250, estimatedDays: 1 },
       { id: "digital-pr-5", title: "ПР 5", description: "Практическая работа №5 по цифровой экономике", price: 1250, estimatedDays: 1 },
-      { id: "digital-lr-1", title: "ЛР 1", description: "Лабораторная работа №1 по цифровой экономике", price: 1000, estimatedDays: 2 },
-      { id: "digital-lr-2", title: "ЛР 2", description: "Лабораторная работа №2 по цифровой экономике", price: 1000, estimatedDays: 2 },
-      { id: "digital-lr-3", title: "ЛР 3", description: "Лабораторная работа №3 по цифровой экономике", price: 1000, estimatedDays: 2 }
+      { id: "digital-lr-1", title: "ЛР 1", description: "Лабораторная работа №1 по цифровой экономике", price: 1250, estimatedDays: 2 },
+      { id: "digital-lr-2", title: "ЛР 2", description: "Лабораторная работа №2 по цифровой экономике", price: 1250, estimatedDays: 2 },
+      { id: "digital-lr-3", title: "ЛР 3", description: "Лабораторная работа №3 по цифровой экономике", price: 1250, estimatedDays: 2 }
     ]
   },
   {

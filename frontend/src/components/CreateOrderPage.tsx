@@ -551,9 +551,27 @@ const CreateOrderPage: React.FC = () => {
                         </Typography>
                       </Box>
                       
-                      <Typography variant="body2" sx={{ color: '#64748b' }}>
-                        {formData.courseId === 1 ? 'от 1000 ₽' : `${getSubjectsByCourseAndSemester(formData.courseId, semester).length} предметов`}
-                      </Typography>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="body2" sx={{ color: '#64748b' }}>
+                          {`${getSubjectsByCourseAndSemester(formData.courseId, semester).length} предметов`}
+                        </Typography>
+                        {(() => {
+                          const semesterSubjects = getSubjectsByCourseAndSemester(formData.courseId, semester);
+                          const minPrice = semesterSubjects
+                            .flatMap(s => s.works)
+                            .reduce<number | null>((min, w) => {
+                              const price = typeof w.price === 'number' ? w.price : null;
+                              if (price === null) return min;
+                              if (min === null || price < min) return price;
+                              return min;
+                            }, null);
+                          return (
+                            <Typography variant="body2" sx={{ color: '#059669', fontWeight: 600 }}>
+                              {minPrice !== null ? `от ${minPrice} ₽` : 'Цена уточняется'}
+                            </Typography>
+                          );
+                        })()}
+                      </Box>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -701,9 +719,19 @@ const CreateOrderPage: React.FC = () => {
                         ) : (
                           <Box /> // Пустое место вместо чипа для предметов без готовых работ
                         )}
-                        <Typography variant="h6" sx={{ fontWeight: 700, color: '#059669' }}>
-                          от 1000 ₽
-                        </Typography>
+                        {(() => {
+                          const minPrice = subject.works.reduce<number | null>((min, w) => {
+                            const price = typeof w.price === 'number' ? w.price : null;
+                            if (price === null) return min;
+                            if (min === null || price < min) return price;
+                            return min;
+                          }, null);
+                          return (
+                            <Typography variant="h6" sx={{ fontWeight: 700, color: '#059669' }}>
+                              {minPrice !== null ? `от ${minPrice} ₽` : 'Цена уточняется'}
+                            </Typography>
+                          );
+                        })()}
                       </Box>
                     </CardContent>
                   </Card>
@@ -977,13 +1005,15 @@ const CreateOrderPage: React.FC = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Индивидуальная информация (предприятие, бизнес-процесс, предметная область)"
+                  label="Индивидуальная информация"
                   value={formData.inputData}
                   onChange={(e) => setFormData(prev => ({ ...prev, inputData: e.target.value }))}
                   variant="outlined"
                   multiline
                   rows={3}
                   required
+                  placeholder="(предприятие, бизнес-процесс, предметная область)"
+                  helperText="Укажите предприятие, бизнес-процесс и предметную область"
                 />
               </Grid>
               <Grid item xs={12}>
