@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
     else:
         print("⚠️ Backend запущен без подключения к БД!")
     
-    if BOT_TOKEN and BOT_CHAT_ID:
+    if BOT_TOKEN and (BOT_CHAT_ID or ADMIN_CHAT_IDS):
         print("📱 Telegram уведомления настроены")
     else:
         print("⚠️ Telegram уведомления не настроены")
@@ -59,6 +59,8 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 BOT_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+# Дополнительные админские чаты (через запятую)
+ADMIN_CHAT_IDS = [cid.strip() for cid in os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "").split(",") if cid.strip()]
 
 # URL для публичного доступа к файлам (для Telegram Bot API)
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://bbifather.ru")
@@ -99,24 +101,36 @@ def init_database():
         return False
 
 def send_notification(message: str):
-    """Отправка уведомления администратору в Telegram"""
-    if not BOT_TOKEN or not BOT_CHAT_ID:
+    """Отправка уведомления администратору(ам) в Telegram"""
+    if not BOT_TOKEN or (not BOT_CHAT_ID and not ADMIN_CHAT_IDS):
         print("⚠️ Telegram бот не настроен")
         print(f"📱 УВЕДОМЛЕНИЕ: {message}")
         return
-    
+
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        payload = {
-            'chat_id': BOT_CHAT_ID,
-            'text': message,
-            'parse_mode': 'HTML'
-        }
-        response = requests.post(url, json=payload, timeout=10)
-        if response.status_code == 200:
-            print("✅ Уведомление отправлено администратору")
-        else:
-            print(f"❌ Ошибка Telegram API: {response.text}")
+        targets: List[str] = []
+        if BOT_CHAT_ID:
+            targets.append(BOT_CHAT_ID)
+        if ADMIN_CHAT_IDS:
+            targets.extend(ADMIN_CHAT_IDS)
+
+        success_any = False
+        for chat_id in list(dict.fromkeys(targets)):
+            payload = {
+                'chat_id': chat_id,
+                'text': message,
+                'parse_mode': 'HTML'
+            }
+            response = requests.post(url, json=payload, timeout=10)
+            if response.status_code == 200:
+                success_any = True
+                print(f"✅ Уведомление отправлено администратору {chat_id}")
+            else:
+                print(f"❌ Ошибка Telegram API для {chat_id}: {response.text}")
+
+        if not success_any:
+            print("⚠️ Не удалось отправить сообщение ни одному администратору")
     except Exception as e:
         print(f"❌ Ошибка отправки в Telegram: {e}")
         print(f"📱 УВЕДОМЛЕНИЕ: {message}")
