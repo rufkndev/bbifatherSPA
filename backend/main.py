@@ -16,7 +16,10 @@ from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
 # Загружаем переменные из .env файла
-load_dotenv()
+env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+load_dotenv(dotenv_path=env_path, override=True)
+print(f"🔧 Загружен .env из: {env_path}")
+print(f"🔧 Файл существует: {os.path.exists(env_path)}")
 
 # Функция для инициализации при запуске
 @asynccontextmanager
@@ -63,7 +66,10 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 BOT_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 # Дополнительные админские чаты (через запятую)
-ADMIN_CHAT_IDS = [cid.strip() for cid in os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "").split(",") if cid.strip()]
+_raw_admin_ids = os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "")
+print(f"🔧 DEBUG: TELEGRAM_ADMIN_CHAT_IDS raw value: '{_raw_admin_ids}'")
+ADMIN_CHAT_IDS = [cid.strip() for cid in _raw_admin_ids.split(",") if cid.strip()]
+print(f"🔧 DEBUG: ADMIN_CHAT_IDS parsed: {ADMIN_CHAT_IDS}")
 
 # URL для публичного доступа к файлам (для Telegram Bot API)
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://bbifather.ru")
