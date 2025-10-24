@@ -54,6 +54,7 @@ class BBIFatherBot:
         self.app.add_handler(CommandHandler("help", self.help_command))
         self.app.add_handler(CommandHandler("rules", self.rules_command))
         self.app.add_handler(CommandHandler("support", self.support_command))
+        self.app.add_handler(CommandHandler("id", self.id_command))
         
         # Обработчик текстовых сообщений (включая кнопки меню)
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
@@ -235,6 +236,15 @@ class BBIFatherBot:
             reply_markup=keyboard,
             parse_mode='HTML'
         )
+
+    async def id_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показывает пользователю его chat_id и username для настройки уведомлений"""
+        user = update.effective_user
+        text = (
+            f"🆔 Ваш Telegram ID: <code>{user.id}</code>\n"
+            f"👤 Username: @{user.username or 'не указан'}"
+        )
+        await update.message.reply_text(text, parse_mode='HTML', reply_markup=self.get_main_keyboard(user.username))
 
     async def handle_support_request(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edit: bool = False):
         """Обработка запроса в техподдержку - перенаправление к админу"""
