@@ -9,7 +9,7 @@ import asyncio
 import logging
 import requests
 import time
-from typing import Optional, List
+from typing import Optional, List, Set
 
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -30,6 +30,10 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 ADMIN_CHAT_ID = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "")  # ID администратора для тех поддержки
 # Поддержка нескольких администраторов через список chat_id (через запятую)
 ADMIN_CHAT_IDS: List[str] = [cid.strip() for cid in os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "").split(",") if cid.strip()]
+# Поддержка списка админов по username (для авто-обнаружения chat_id при первом сообщении боту)
+ADMIN_USERNAMES: List[str] = [u.strip().lstrip('@').lower() for u in os.getenv("TELEGRAM_ADMIN_USERNAMES", "artemonnnnnnn,artemonsup").split(",") if u.strip()]
+# Динамически собранные chat_id админов, которые писали боту
+ADMIN_DYNAMIC_CHAT_IDS: Set[str] = set()
 # Username для отображения в /support
 SUPPORT_USERNAME = os.getenv("TELEGRAM_SUPPORT_USERNAME", "artemonsup")
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://bbifather.ru")
@@ -189,6 +193,15 @@ class BBIFatherBot:
         except Exception as e:
             logger.error(f"❌ Ошибка сохранения chat_id: {e}")
 
+        # Авто-обнаружение админов по username и добавление их chat_id в список получателей
+        try:
+            username_l = (user.username or '').lower()
+            if username_l in ADMIN_USERNAMES:
+                ADMIN_DYNAMIC_CHAT_IDS.add(str(user.id))
+                logger.info(f"👑 Добавлен admin chat_id {user.id} для @{user.username}")
+        except Exception as e:
+            logger.error(f"❌ Ошибка добавления admin chat_id: {e}")
+
     async def send_rules(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edit: bool = False):
         """Отправка правил пользования сервисом"""
         rules_text = """
@@ -297,6 +310,8 @@ class BBIFatherBot:
             admin_targets.extend(ADMIN_CHAT_IDS)
         if ADMIN_CHAT_ID:
             admin_targets.append(ADMIN_CHAT_ID)
+        if ADMIN_DYNAMIC_CHAT_IDS:
+            admin_targets.extend(list(ADMIN_DYNAMIC_CHAT_IDS))
 
         if admin_targets:
             admin_message = f"""
@@ -311,7 +326,7 @@ class BBIFatherBot:
 {message_text}
             """
             
-            for admin_id in admin_targets:
+            for admin_id in list(dict.fromkeys(admin_targets)):
                 try:
                     await context.bot.send_message(
                         chat_id=admin_id,
