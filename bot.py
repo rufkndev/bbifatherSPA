@@ -30,7 +30,8 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 ADMIN_CHAT_ID = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "")  # ID администратора для тех поддержки
 # Поддержка нескольких администраторов через список chat_id (через запятую)
 ADMIN_CHAT_IDS: List[str] = [cid.strip() for cid in os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "").split(",") if cid.strip()]
-ADMIN_USERNAME = os.getenv("TELEGRAM_ADMIN_USERNAME", "artemonsup")  # Username администратора  
+# Username для отображения в /support
+SUPPORT_USERNAME = os.getenv("TELEGRAM_SUPPORT_USERNAME", "artemonsup")
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://bbifather.ru")
 API_BASE_URL = os.getenv("API_BASE_URL", "https://bbifather.ru/api")  # URL для API запросов
 
@@ -238,7 +239,7 @@ class BBIFatherBot:
 Нажмите кнопку ниже для связи с администратором 👇
         """
         
-        support_text += f"\n\n📞 <b>Контакт:</b> @{ADMIN_USERNAME}"
+        support_text += f"\n\n📞 <b>Контакт:</b> @{SUPPORT_USERNAME}"
         
         keyboard = self.get_main_keyboard(user.username)
         
