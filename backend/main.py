@@ -27,10 +27,13 @@ async def lifespan(app: FastAPI):
     else:
         print("⚠️ Backend запущен без подключения к БД!")
     
-    if BOT_TOKEN and (BOT_CHAT_ID or ADMIN_CHAT_IDS):
+    if BOT_TOKEN and (BOT_CHAT_ID or ADMIN_CHAT_IDS or ADMIN_USERNAMES):
         print("📱 Telegram уведомления настроены")
     else:
         print("⚠️ Telegram уведомления не настроены")
+    print(f"🔧 TELEGRAM_CHAT_ID: {BOT_CHAT_ID}")
+    print(f"🔧 TELEGRAM_ADMIN_CHAT_IDS: {ADMIN_CHAT_IDS}")
+    print(f"🔧 TELEGRAM_ADMIN_USERNAMES: {ADMIN_USERNAMES}")
     
     yield
     # Shutdown
@@ -59,8 +62,9 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 BOT_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
-# Дополнительные админские чаты (через запятую)
+# Дополнительные админские чаты (через запятую) и username'ы
 ADMIN_CHAT_IDS = [cid.strip() for cid in os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "").split(",") if cid.strip()]
+ADMIN_USERNAMES = [u.strip().lstrip('@') for u in os.getenv("TELEGRAM_ADMIN_USERNAMES", "artemonnnnnnn,artemonsup").split(",") if u.strip()]
 
 # URL для публичного доступа к файлам (для Telegram Bot API)
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://bbifather.ru")
