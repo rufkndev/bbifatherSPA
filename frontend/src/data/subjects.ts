@@ -308,7 +308,7 @@ export const subjectsData: SubjectData[] = [
       { id: "it-pr-1", title: "ПР №1", price: 1000, estimatedDays: 3 },
       { id: "it-pr-2", title: "ПР №2", price: 1500, estimatedDays: 3 },
       { id: "it-pr-3", title: "ПР №3", price: 1500, estimatedDays: 3 },
-      { id: "it-pr-4", title: "ПР №4", estimatedDays: 3 },
+      { id: "it-pr-4", title: "ПР №4", price: 1500, estimatedDays: 3 },
       { id: "it-pr-5", title: "ПР №5", estimatedDays: 3 },
       { id: "it-pr-6", title: "ПР №6", estimatedDays: 3 },
       { id: "it-ikr", title: "ИКР", estimatedDays: 3 },
@@ -339,7 +339,8 @@ export const subjectsData: SubjectData[] = [
     works: [
       { id: "bigdata-arch-pr-1", title: "ПР №1", price: 1500, estimatedDays: 3 },
       { id: "bigdata-arch-pr-2", title: "ПР №2", price: 1500, estimatedDays: 3 },
-      { id: "bigdata-arch-pr-3", title: "ПР №3", estimatedDays: 3 }
+      { id: "bigdata-arch-pr-3", title: "ПР №3", price: 1500, estimatedDays: 3 },
+      { id: "bigdata-arch-group", title: "Групповой проект", price: 5000, estimatedDays: 7 }
     ]
   },
   {
@@ -355,6 +356,27 @@ export const subjectsData: SubjectData[] = [
       { id: "process-pr-4", title: "ПР №4", estimatedDays: 3 },
       { id: "process-ikr", title: "ИКР", estimatedDays: 3 },
       { id: "process-referat", title: "Реферат", price: 3000, estimatedDays: 3 }
+    ]
+  }
+  ,
+  {
+    id: "knir-1",
+    name: "КНИР 1",
+    description: "Курсовая научно-исследовательская работа, 1 часть",
+    course: 3,
+    semester: 5,
+    works: [
+      { id: "knir1-task", title: "Постановка задачи исследования", price: 1000 },
+      { id: "knir1-pr1", title: "ПР1 Разработка плана проекта исследования", price: 1000 },
+      { id: "knir1-pr2", title: "ПР2  Системный анализ объекта исследования", price: 2000 },
+      { id: "knir1-pr3", title: "ПР3 Определение границ предметной области", price: 1500 },
+      { id: "knir1-pr4", title: "ПР4 Разработка архитектурных моделей бизнес-процесса", price: 2000 },
+      { id: "knir1-pr5", title: "ПР5 Разработка процессных моделей предприятия", price: 2000 },
+      { id: "knir1-pr6-1", title: "ПР6.1 Разработка KPI и анализ закономерностей причинно-следственных связей", price: 1250 },
+      { id: "knir1-pr6-2", title: "ПР6.2 Разработка требований к сервисному управлению изменениями/инцидентами", price: 1000 },
+      { id: "knir1-pr6-3", title: "ПР6.3 Разработка модели базы данных", price: 1000 },
+      { id: "knir1-pr7", title: "ПР7 Планирование проекта по разработке и внедрению информационной системы", price: 1250 },
+      { id: "knir1-final", title: "Итоговый отчет", price: 1000 }
     ]
   }
 ];
