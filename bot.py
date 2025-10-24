@@ -9,7 +9,7 @@ import asyncio
 import logging
 import requests
 import time
-from typing import Optional
+from typing import Optional, List
 
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -28,7 +28,9 @@ logger = logging.getLogger(__name__)
 # Константы для бота (только то что нужно боту)
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 ADMIN_CHAT_ID = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "")  # ID администратора для тех поддержки
-ADMIN_USERNAME = os.getenv("TELEGRAM_ADMIN_USERNAME", "bbifatheradmin")  # Username администратора  
+# Поддержка нескольких администраторов через список chat_id (через запятую)
+ADMIN_CHAT_IDS: List[str] = [cid.strip() for cid in os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "").split(",") if cid.strip()]
+ADMIN_USERNAME = os.getenv("TELEGRAM_ADMIN_USERNAME", "artemonsup")  # Username администратора  
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://bbifather.ru")
 API_BASE_URL = os.getenv("API_BASE_URL", "https://bbifather.ru/api")  # URL для API запросов
 
@@ -288,8 +290,14 @@ class BBIFatherBot:
             reply_markup=self.get_main_keyboard(user.username)
         )
         
-        # Отправка администратору (если ID задан)
+        # Отправка администраторам (если ID заданы)
+        admin_targets: List[str] = []
+        if ADMIN_CHAT_IDS:
+            admin_targets.extend(ADMIN_CHAT_IDS)
         if ADMIN_CHAT_ID:
+            admin_targets.append(ADMIN_CHAT_ID)
+
+        if admin_targets:
             admin_message = f"""
 🆘 <b>Новое обращение в техподдержку</b>
 
@@ -302,15 +310,16 @@ class BBIFatherBot:
 {message_text}
             """
             
-            try:
-                await context.bot.send_message(
-                    chat_id=ADMIN_CHAT_ID,
-                    text=admin_message,
-                    parse_mode='HTML'
-                )
-                logger.info(f"Support message forwarded to admin from user {user.id}")
-            except Exception as e:
-                logger.error(f"Failed to forward message to admin: {e}")
+            for admin_id in admin_targets:
+                try:
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=admin_message,
+                        parse_mode='HTML'
+                    )
+                    logger.info(f"Support message forwarded to admin {admin_id} from user {user.id}")
+                except Exception as e:
+                    logger.error(f"Failed to forward message to admin {admin_id}: {e}")
 
     async def back_to_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Возврат в главное меню"""
@@ -410,7 +419,7 @@ def main():
             logger.error("❌ TELEGRAM_BOT_TOKEN не задан!")
             return
             
-        if ADMIN_CHAT_ID:
+        if ADMIN_CHAT_IDS or ADMIN_CHAT_ID:
             logger.info("👨‍💼 Техподдержка настроена")
         else:
             logger.warning("⚠️ Техподдержка не настроена")
