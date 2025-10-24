@@ -5,6 +5,7 @@ import {
   Card,
   CardContent,
   Typography,
+  TextField,
   Button,
   Chip,
   Table,
@@ -26,7 +27,7 @@ import {
   CircularProgress
 } from '@mui/material';
 import { Order, OrderStatus } from '../types';
-import { getOrders, updateOrderStatus, markOrderAsPaid, uploadOrderFiles } from '../api';
+import { getOrders, updateOrderStatus, markOrderAsPaid, uploadOrderFiles, updateOrderPrice } from '../api';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
@@ -59,6 +60,7 @@ const AdminPage: React.FC = () => {
   const [newStatus, setNewStatus] = useState<OrderStatus>(OrderStatus.NEW);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [priceInput, setPriceInput] = useState<string>('');
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -91,6 +93,8 @@ const AdminPage: React.FC = () => {
     setSelectedOrder(order);
     setNewStatus(order.status);
     setDialogOpen(true);
+    const initialPrice = (order.actual_price ?? order.subject?.price ?? 0).toString();
+    setPriceInput(initialPrice);
   };
 
   const handleStatusUpdate = async () => {
@@ -138,6 +142,25 @@ const AdminPage: React.FC = () => {
       setError('Не удалось загрузить файлы');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleSavePrice = async () => {
+    if (!selectedOrder || !selectedOrder.id) return;
+    const parsed = parseFloat(priceInput.replace(',', '.'));
+    if (isNaN(parsed) || parsed < 0) {
+      setError('Введите корректную стоимость');
+      return;
+    }
+    try {
+      const updatedOrder = await updateOrderPrice(selectedOrder.id, parsed);
+      setOrders(prev => prev.map(order => 
+        order.id === updatedOrder.id ? updatedOrder : order
+      ));
+      setSelectedOrder(updatedOrder);
+    } catch (e) {
+      console.error('Ошибка обновления цены:', e);
+      setError('Не удалось обновить стоимость заказа');
     }
   };
 
@@ -549,6 +572,24 @@ const AdminPage: React.FC = () => {
               )}
               
               <Box sx={{ mt: 3 }}>
+                {/* Стоимость заказа */}
+                <Box sx={{ mb: 2, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <TextField
+                    label="Стоимость, ₽"
+                    type="number"
+                    value={priceInput}
+                    onChange={(e) => setPriceInput(e.target.value)}
+                    sx={{ maxWidth: 240 }}
+                    inputProps={{ step: '50', min: '0' }}
+                  />
+                  <Button variant="contained" onClick={handleSavePrice}>
+                    Сохранить цену
+                  </Button>
+                  <Typography variant="body2" color="text.secondary">
+                    После сохранения статус будет "Ожидание оплаты" (если не оплачен)
+                  </Typography>
+                </Box>
+
                 <FormControl fullWidth sx={{ mb: 2 }}>
                   <InputLabel>Статус</InputLabel>
                   <Select

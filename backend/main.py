@@ -154,7 +154,7 @@ async def send_status_notification_to_user(order: dict, new_status: str):
             'title': 'Новый заказ создан',
             'message': 'Ваш заказ принят в систему. Ожидается оплата.'
         },
-        'pending_payment': {
+        'waiting_payment': {
             'emoji': '💳', 
             'title': 'Ожидается оплата',
             'message': 'Пожалуйста, произведите оплату согласно указанным реквизитам.'
@@ -943,6 +943,57 @@ def mark_order_as_paid(order_id: int):
         if "No rows found" in str(e):
             raise HTTPException(status_code=404, detail="Заказ не найден")
         raise HTTPException(status_code=500, detail=f"Ошибка обновления оплаты: {str(e)}")
+
+@app.patch("/api/orders/{order_id}/price")
+async def update_order_price(order_id: int, request: Request):
+    """Обновление стоимости заказа администратором и перевод в статус 'ожидание оплаты'"""
+    try:
+        data = await request.json()
+        price = data.get('price')
+
+        if price is None:
+            raise HTTPException(status_code=400, detail="Не указана цена (price)")
+
+        try:
+            price_value = float(price)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Некорректное значение цены")
+
+        if price_value < 0:
+            raise HTTPException(status_code=400, detail="Цена не может быть отрицательной")
+
+        # Получаем текущий заказ
+        current_order = get_order(order_id)
+
+        # Определяем новый статус: если заказ новый или уже в ожидании оплаты и не оплачен
+        new_status = current_order.get('status')
+        if not current_order.get('is_paid') and new_status in ('new', 'waiting_payment'):
+            new_status = 'waiting_payment'
+
+        # Обновляем заказ в БД
+        response = supabase.table('orders').update({
+            'actual_price': price_value,
+            'status': new_status,
+            'updated_at': datetime.now().isoformat()
+        }).eq('id', order_id).execute()
+
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+
+        # Получаем обновленный заказ
+        updated_order = get_order(order_id)
+
+        # Отправляем уведомление пользователю, если статус изменился на ожидание оплаты
+        if current_order.get('status') != new_status and updated_order['student'].get('telegram'):
+            await send_status_notification_to_user(updated_order, new_status)
+
+        return updated_order
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Ошибка обновления цены заказа: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка обновления цены: {str(e)}")
 
 @app.post("/api/orders/{order_id}/files")
 async def upload_order_files(order_id: int, files: list[UploadFile] = File(...)):
