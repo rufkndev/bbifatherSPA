@@ -27,13 +27,13 @@ async def lifespan(app: FastAPI):
     else:
         print("⚠️ Backend запущен без подключения к БД!")
     
-    if BOT_TOKEN and (BOT_CHAT_ID or ADMIN_CHAT_IDS or ADMIN_USERNAMES):
+    if BOT_TOKEN and (BOT_CHAT_ID or ADMIN_CHAT_IDS):
         print("📱 Telegram уведомления настроены")
+        print(f"🔧 BOT_CHAT_ID: {BOT_CHAT_ID}")
+        print(f"🔧 ADMIN_CHAT_IDS: {ADMIN_CHAT_IDS}")
+        print(f"🔧 Raw TELEGRAM_ADMIN_CHAT_IDS: {os.getenv('TELEGRAM_ADMIN_CHAT_IDS', 'НЕ ЗАДАНО')}")
     else:
         print("⚠️ Telegram уведомления не настроены")
-    print(f"🔧 TELEGRAM_CHAT_ID: {BOT_CHAT_ID}")
-    print(f"🔧 TELEGRAM_ADMIN_CHAT_IDS: {ADMIN_CHAT_IDS}")
-    print(f"🔧 TELEGRAM_ADMIN_USERNAMES: {ADMIN_USERNAMES}")
     
     yield
     # Shutdown
@@ -62,9 +62,8 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 BOT_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
-# Дополнительные админские чаты (через запятую) и username'ы
+# Дополнительные админские чаты (через запятую)
 ADMIN_CHAT_IDS = [cid.strip() for cid in os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "").split(",") if cid.strip()]
-ADMIN_USERNAMES = [u.strip().lstrip('@') for u in os.getenv("TELEGRAM_ADMIN_USERNAMES", "artemonnnnnnn,artemonsup").split(",") if u.strip()]
 
 # URL для публичного доступа к файлам (для Telegram Bot API)
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://bbifather.ru")
@@ -114,10 +113,16 @@ def send_notification(message: str):
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         targets: List[str] = []
+        
+        print(f"🔍 BOT_CHAT_ID: {BOT_CHAT_ID} (тип: {type(BOT_CHAT_ID).__name__})")
+        print(f"🔍 ADMIN_CHAT_IDS: {ADMIN_CHAT_IDS} (длина: {len(ADMIN_CHAT_IDS)})")
+        
         if BOT_CHAT_ID:
             targets.append(BOT_CHAT_ID)
+            print(f"  ➕ Добавлен BOT_CHAT_ID: {BOT_CHAT_ID}")
         if ADMIN_CHAT_IDS:
             targets.extend(ADMIN_CHAT_IDS)
+            print(f"  ➕ Добавлены ADMIN_CHAT_IDS: {ADMIN_CHAT_IDS}")
 
         print(f"📣 Админ-цели для уведомления: {targets}")
 
