@@ -115,6 +115,8 @@ def send_notification(message: str):
         if ADMIN_CHAT_IDS:
             targets.extend(ADMIN_CHAT_IDS)
 
+        print(f"📣 Админ-цели для уведомления: {targets}")
+
         success_any = False
         for chat_id in list(dict.fromkeys(targets)):
             payload = {
