@@ -114,6 +114,17 @@ ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
 ALTER TABLE orders ADD CONSTRAINT orders_status_check 
     CHECK (status IN ('new', 'waiting_payment', 'paid', 'in_progress', 'completed', 'needs_revision', 'queued', 'under_review'));
 
+-- Если у ограничения статусa не было имени и DROP выше не сработал:
+-- Найдите имя CHECK-ограничения и удалите его
+-- (выполните, посмотрите conname, затем подставьте его в DROP CONSTRAINT)
+SELECT conname 
+FROM pg_constraint c 
+JOIN pg_class t ON c.conrelid = t.oid 
+WHERE t.relname = 'orders' AND c.contype = 'c';
+-- Пример:
+-- ALTER TABLE public.orders DROP CONSTRAINT orders_status_check_legacy;
+-- После удаления — добавьте новое, как выше
+
 -- Добавление базовых предметов
 INSERT INTO subjects (name, description, price) VALUES
     ('Летняя практика', 'Системный анализ предприятия, архитектурное моделирование, управление проектами', 2500.0),

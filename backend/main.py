@@ -81,6 +81,12 @@ ERP_SUBJECT_NAME = "Архитектура прикладных информац
 # Отдельный чат для уведомлений по ERP (по умолчанию 814032949, можно переопределить в .env)
 ERP_CHAT_ID = os.getenv("TELEGRAM_ERP_CHAT_ID", "814032949")
 
+# Разрешённые статусы заказов (включая новые)
+ALLOWED_ORDER_STATUSES = {
+    'new', 'waiting_payment', 'paid', 'in_progress', 'completed', 'needs_revision',
+    'queued', 'under_review'
+}
+
 if not SUPABASE_URL or not SUPABASE_KEY:
     print("⚠️ SUPABASE_URL и SUPABASE_KEY должны быть установлены!")
     print("Создайте .env файл или установите переменные окружения")
@@ -979,14 +985,29 @@ async def update_order_status(order_id: int, request: Request):
     status = data['status']
     
     try:
+        # Валидация статуса на стороне backend (даёт понятную 400 вместо 500)
+        if status not in ALLOWED_ORDER_STATUSES:
+            raise HTTPException(status_code=400, detail=f"Недопустимый статус: {status}")
+        
         # Получаем старый заказ для сравнения
         old_order = get_order(order_id)
         
         # Обновляем статус заказа
-        response = supabase.table('orders').update({
-            'status': status,
-            'updated_at': datetime.now().isoformat()
-        }).eq('id', order_id).execute()
+        try:
+            response = supabase.table('orders').update({
+                'status': status,
+                'updated_at': datetime.now().isoformat()
+            }).eq('id', order_id).execute()
+        except Exception as e:
+            # Если БД отклоняет новые статусы из-за CHECK-constraint
+            err_text = str(e)
+            if 'check constraint' in err_text.lower() or 'violates check constraint' in err_text.lower():
+                raise HTTPException(
+                    status_code=400,
+                    detail=("Схема БД не допускает новый статус. Обновите CHECK-constraint для orders.status, "
+                            "добавив 'queued' и 'under_review'. См. DEPLOYMENT_GUIDE.md, раздел SQL миграции статусов.")
+                )
+            raise
         
         if not response.data:
             raise HTTPException(status_code=404, detail="Заказ не найден")
