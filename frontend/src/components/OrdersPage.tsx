@@ -552,7 +552,7 @@ const OrdersPage: React.FC = () => {
                        <LinearProgress 
                          variant="determinate" 
                          value={statusInfo.progress} 
-                         color={statusInfo.color} 
+                         color={(statusInfo.color === 'default' ? 'inherit' : statusInfo.color) as 'inherit' | 'primary' | 'secondary' | 'info' | 'success' | 'warning' | 'error'} 
                          sx={{
                            height: { xs: 6, sm: 4 },
                            borderRadius: 3,
