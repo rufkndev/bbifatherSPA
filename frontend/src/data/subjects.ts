@@ -292,8 +292,8 @@ export const subjectsData: SubjectData[] = [
       { id: "arch-pr-4", title: "ПР №4", price: 1500, estimatedDays: 3 },
       { id: "arch-pr-5", title: "ПР №5", price: 1250, estimatedDays: 3 },
       { id: "arch-pr-6", title: "ПР №6", price: 2000, estimatedDays: 3 },
-      { id: "arch-pr-7", title: "ПР №7", estimatedDays: 3 },
-      { id: "arch-pr-8", title: "ПР №8", estimatedDays: 3 },
+      { id: "arch-pr-7", title: "ПР №7", price: 1500, estimatedDays: 3 },
+      { id: "arch-pr-8", title: "ПР №8", price: 2000, estimatedDays: 3 },
       { id: "arch-pr-9", title: "ПР №9", estimatedDays: 3 },
       { id: "arch-pr-10", title: "ПР №10", estimatedDays: 3 }
     ]
@@ -309,8 +309,8 @@ export const subjectsData: SubjectData[] = [
       { id: "it-pr-2", title: "ПР №2", price: 1500, estimatedDays: 3 },
       { id: "it-pr-3", title: "ПР №3", price: 1500, estimatedDays: 3 },
       { id: "it-pr-4", title: "ПР №4", price: 1500, estimatedDays: 3 },
-      { id: "it-pr-5", title: "ПР №5", estimatedDays: 3 },
-      { id: "it-pr-6", title: "ПР №6", estimatedDays: 3 },
+      { id: "it-pr-5", title: "ПР №5", price: 1500, estimatedDays: 3 },
+      { id: "it-pr-6", title: "ПР №6", price: 1500, estimatedDays: 3 },
       { id: "it-ikr", title: "ИКР", estimatedDays: 3 },
       { id: "it-referat", title: "Реферат", price: 3000, estimatedDays: 3 }
     ]
@@ -350,8 +350,8 @@ export const subjectsData: SubjectData[] = [
     course: 3,
     semester: 5,
     works: [
-      { id: "process-pr-1", title: "ПР №1", estimatedDays: 3 },
-      { id: "process-pr-2", title: "ПР №2", estimatedDays: 3 },
+      { id: "process-pr-1", title: "ПР №1", price: 2500, estimatedDays: 3 },
+      { id: "process-pr-2", title: "ПР №2", price: 1250, estimatedDays: 3 },
       { id: "process-pr-3", title: "ПР №3", estimatedDays: 3 },
       { id: "process-pr-4", title: "ПР №4", estimatedDays: 3 },
       { id: "process-ikr", title: "ИКР", estimatedDays: 3 },
