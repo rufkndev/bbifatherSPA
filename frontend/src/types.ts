@@ -20,7 +20,9 @@ export enum OrderStatus {
   PAID = 'paid',
   IN_PROGRESS = 'in_progress',
   COMPLETED = 'completed',
-  NEEDS_REVISION = 'needs_revision'
+  NEEDS_REVISION = 'needs_revision',
+  QUEUED = 'queued',
+  UNDER_REVIEW = 'under_review'
 }
 
 export interface Order {

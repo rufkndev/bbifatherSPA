@@ -109,6 +109,11 @@ CREATE TRIGGER update_orders_updated_at
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
+-- Обновление допустимых статусов заказов (добавляем 'queued' и 'under_review')
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+ALTER TABLE orders ADD CONSTRAINT orders_status_check 
+    CHECK (status IN ('new', 'waiting_payment', 'paid', 'in_progress', 'completed', 'needs_revision', 'queued', 'under_review'));
+
 -- Добавление базовых предметов
 INSERT INTO subjects (name, description, price) VALUES
     ('Летняя практика', 'Системный анализ предприятия, архитектурное моделирование, управление проектами', 2500.0),
@@ -248,6 +253,8 @@ SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZi
 # Telegram Bot настройки (опционально)
 TELEGRAM_BOT_TOKEN=7582178055:AAFcTdIt3g1LiJ-6-W0QDR1p1MPm9LkSFCY
 TELEGRAM_CHAT_ID=814032949
+# Отдельный чат для уведомлений по предмету ERP (можно изменить)
+TELEGRAM_ERP_CHAT_ID=814032949
 
 # Frontend URLs для CORS
 FRONTEND_URLS=https://bbifather.ru,https://www.bbifather.ru

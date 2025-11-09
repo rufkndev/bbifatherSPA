@@ -76,6 +76,11 @@ PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://bbifather.ru")
 
 print(f"🔗 PUBLIC_BASE_URL: {PUBLIC_BASE_URL}")
 
+# Специальные настройки для предмета ERP
+ERP_SUBJECT_NAME = "Архитектура прикладных информационных систем (ERP)"
+# Отдельный чат для уведомлений по ERP (по умолчанию 814032949, можно переопределить в .env)
+ERP_CHAT_ID = os.getenv("TELEGRAM_ERP_CHAT_ID", "814032949")
+
 if not SUPABASE_URL or not SUPABASE_KEY:
     print("⚠️ SUPABASE_URL и SUPABASE_KEY должны быть установлены!")
     print("Создайте .env файл или установите переменные окружения")
@@ -103,6 +108,22 @@ def init_database():
         subjects_count = supabase.table('subjects').select('id', count='exact').execute()
         if subjects_count.count == 0:
             print("⚠️ В таблице subjects нет данных. Создайте предметы в Supabase Dashboard.")
+        
+        # Обеспечиваем наличие предмета ERP
+        try:
+            erp_subject = supabase.table('subjects').select('id').eq('name', ERP_SUBJECT_NAME).limit(1).execute()
+            if not erp_subject.data:
+                print(f"➕ Добавляем предмет: {ERP_SUBJECT_NAME}")
+                supabase.table('subjects').insert({
+                    'name': ERP_SUBJECT_NAME,
+                    'description': 'Практические работы по ERP',
+                    'price': 0.0,
+                    'is_active': True
+                }).execute()
+            else:
+                print(f"✅ Предмет уже существует: {ERP_SUBJECT_NAME} (id={erp_subject.data[0]['id']})")
+        except Exception as e:
+            print(f"⚠️ Не удалось проверить/добавить предмет ERP: {e}")
         
         return True
     except Exception as e:
@@ -151,6 +172,27 @@ def send_notification(message: str):
     except Exception as e:
         print(f"❌ Ошибка отправки в Telegram: {e}")
         print(f"📱 УВЕДОМЛЕНИЕ: {message}")
+
+def send_notification_to_specific_chat(message: str, chat_id: str):
+    """Отправка уведомления в конкретный чат Telegram"""
+    if not BOT_TOKEN or not chat_id:
+        print("⚠️ Telegram бот не настроен или не указан chat_id для специфичного уведомления")
+        print(f"📱 УВЕДОМЛЕНИЕ (ERP): {message}")
+        return
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        payload = {
+            'chat_id': chat_id,
+            'text': message,
+            'parse_mode': 'HTML'
+        }
+        response = requests.post(url, json=payload, timeout=10)
+        if response.status_code == 200:
+            print(f"✅ Уведомление отправлено в чат {chat_id}")
+        else:
+            print(f"❌ Ошибка Telegram API ({chat_id}): {response.text}")
+    except Exception as e:
+        print(f"❌ Ошибка отправки в конкретный чат: {e}")
 
 async def send_status_notification_to_user(order: dict, new_status: str):
     """Отправка уведомления пользователю об изменении статуса заказа"""
@@ -905,6 +947,13 @@ async def create_order(request: Request):
                 message += f"\n\n📋 Дополнительные требования:\n{created_order['input_data'][:300]}{'...' if len(created_order['input_data']) > 300 else ''}"
             
             send_notification(message)
+            
+            # Дополнительное уведомление для заказов по ERP в отдельный чат
+            try:
+                if created_order.get('subject', {}).get('name') == ERP_SUBJECT_NAME and ERP_CHAT_ID:
+                    send_notification_to_specific_chat(message, ERP_CHAT_ID)
+            except Exception as e:
+                print(f"⚠️ Ошибка отправки ERP-уведомления: {e}")
         except Exception as e:
             print(f"⚠️ Ошибка отправки уведомления администратору: {e}")
         
@@ -1426,6 +1475,12 @@ async def notify_payment(order_id: int):
         message += f"\n\nУведомление: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
         
         send_notification(message)
+        # Дополнительное уведомление для ERP
+        try:
+            if order.get('subject', {}).get('name') == ERP_SUBJECT_NAME and ERP_CHAT_ID:
+                send_notification_to_specific_chat(message, ERP_CHAT_ID)
+        except Exception as e:
+            print(f"⚠️ Ошибка отправки ERP-уведомления (оплата): {e}")
         print(f"💰 Отправлено уведомление об оплате заказа #{order_id}")
         
         # Отправляем уведомление пользователю о получении заявки на оплату
@@ -1538,6 +1593,12 @@ async def request_order_revision(order_id: int, request: Request):
         message += f"\n\nЗапрос отправлен: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
         
         send_notification(message)
+        # Дополнительное уведомление для ERP
+        try:
+            if order.get('subject', {}).get('name') == ERP_SUBJECT_NAME and ERP_CHAT_ID:
+                send_notification_to_specific_chat(message, ERP_CHAT_ID)
+        except Exception as e:
+            print(f"⚠️ Ошибка отправки ERP-уведомления (исправления): {e}")
         print(f"🔄 Отправлено уведомление о запросе исправлений для заказа #{order_id}")
         
         # Отправляем уведомление пользователю о необходимости исправлений

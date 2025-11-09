@@ -40,6 +40,8 @@ const statusConfig = {
   [OrderStatus.IN_PROGRESS]: { color: 'secondary' as const, label: 'В работе', icon: '⚙️', progress: 70 },
   [OrderStatus.COMPLETED]: { color: 'success' as const, label: 'Выполнен', icon: '✅', progress: 100 },
   [OrderStatus.NEEDS_REVISION]: { color: 'error' as const, label: 'Нужны исправления', icon: '🔄', progress: 80 },
+  [OrderStatus.QUEUED]: { color: 'default' as const, label: 'В очереди', icon: '🕒', progress: 5 },
+  [OrderStatus.UNDER_REVIEW]: { color: 'info' as const, label: 'На рассмотрении', icon: '👀', progress: 50 },
 };
 
 const OrdersPage: React.FC = () => {

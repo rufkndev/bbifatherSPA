@@ -79,6 +79,7 @@ const CreateOrderPage: React.FC = () => {
     inputData: '',
     variantInfo: '',
     deadline: '',
+    oneSDatabaseCredentials: '',
   });
 
   useEffect(() => {
@@ -140,12 +141,16 @@ const CreateOrderPage: React.FC = () => {
         }
         return formData.selectedWorks.length > 0 || formData.isFullCourse;
       case 4: // Данные студента
+        // Доп. требование для предмета ERP: обязательное поле "Логин:Пароль базы 1С"
+        const subjectForValidation = getSubjectById(formData.subjectId);
+        const isErp = subjectForValidation?.name === 'Архитектура прикладных информационных систем (ERP)';
         return (
           formData.studentName.trim() !== '' &&
           formData.studentGroup.trim() !== '' &&
           formData.studentTelegram.trim() !== '' &&
           formData.deadline.trim() !== '' &&
-          formData.inputData.trim() !== ''
+          formData.inputData.trim() !== '' &&
+          (!isErp || formData.oneSDatabaseCredentials.trim() !== '')
         );
       case 5: // Подтверждение
         return true;
@@ -281,6 +286,10 @@ const CreateOrderPage: React.FC = () => {
         }
       }
 
+      const selectedSubjectSubmit = getSubjectById(formData.subjectId);
+      const isErpSubmit = selectedSubjectSubmit?.name === 'Архитектура прикладных информационных систем (ERP)';
+      const combinedInputData = `${formData.inputData}${isErpSubmit && formData.oneSDatabaseCredentials.trim() ? `\n1С логин:пароль: ${formData.oneSDatabaseCredentials}` : ''}`;
+
       const orderData = {
         student: {
           name: formData.studentName,
@@ -290,7 +299,7 @@ const CreateOrderPage: React.FC = () => {
         subject_id: finalSubjectId,
         title,
         description,
-        input_data: formData.inputData,
+        input_data: combinedInputData,
         variant_info: formData.variantInfo,
         deadline: formData.deadline,
         selected_works: formData.selectedWorks,
@@ -1027,6 +1036,23 @@ const CreateOrderPage: React.FC = () => {
                   rows={2}
                 />
               </Grid>
+              {(() => {
+                const selectedSubjectStep4 = getSubjectById(formData.subjectId);
+                const isErpSubject = selectedSubjectStep4?.name === 'Архитектура прикладных информационных систем (ERP)';
+                return isErpSubject ? (
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Логин:Пароль базы 1С"
+                      value={formData.oneSDatabaseCredentials}
+                      onChange={(e) => setFormData(prev => ({ ...prev, oneSDatabaseCredentials: e.target.value }))}
+                      variant="outlined"
+                      required
+                      helperText="Заполните только для ERP-предмета"
+                    />
+                  </Grid>
+                ) : null;
+              })()}
             </Grid>
           </Box>
         );

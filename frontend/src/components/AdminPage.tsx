@@ -38,6 +38,8 @@ const statusColors = {
   [OrderStatus.IN_PROGRESS]: 'secondary',
   [OrderStatus.COMPLETED]: 'success',
   [OrderStatus.NEEDS_REVISION]: 'error',
+  [OrderStatus.QUEUED]: 'default',
+  [OrderStatus.UNDER_REVIEW]: 'info',
 } as const;
 
 const statusLabels = {
@@ -47,6 +49,8 @@ const statusLabels = {
   [OrderStatus.IN_PROGRESS]: 'В работе',
   [OrderStatus.COMPLETED]: 'Выполнен',
   [OrderStatus.NEEDS_REVISION]: 'Нужны исправления',
+  [OrderStatus.QUEUED]: 'В очереди',
+  [OrderStatus.UNDER_REVIEW]: 'На рассмотрении',
 };
 
 const AdminPage: React.FC = () => {
