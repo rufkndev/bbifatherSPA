@@ -323,8 +323,8 @@ export const subjectsData: SubjectData[] = [
     semester: 5,
     works: [
       { id: "services-pr-1", title: "ПР №1", price: 1250, estimatedDays: 3 },
-      { id: "services-pr-2", title: "ПР №2", estimatedDays: 3 },
-      { id: "services-pr-3", title: "ПР №3", estimatedDays: 3 },
+      { id: "services-pr-2", title: "ПР №2", price: 1250, estimatedDays: 3 },
+      { id: "services-pr-3", title: "ПР №3", price: 1250, estimatedDays: 3 },
       { id: "services-ikr", title: "ИКР", estimatedDays: 3 },
       { id: "services-referat", title: "Реферат", price: 3000, estimatedDays: 3 }
     ]
