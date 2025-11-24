@@ -276,7 +276,8 @@ export const subjectsData: SubjectData[] = [
     works: [
       { id: "data-pr-1", title: "ПР №1", price: 1000, estimatedDays: 3 },
       { id: "data-pr-2", title: "ПР №2", price: 1500, estimatedDays: 3 },
-      { id: "data-pr-3", title: "ПР №3", price: 1500, estimatedDays: 3 }
+      { id: "data-pr-3", title: "ПР №3", price: 1500, estimatedDays: 3 },
+      { id: "data-ikr", title: "ИКР", price: 2000, estimatedDays: 3 }
     ]
   },
   {
@@ -326,7 +327,11 @@ export const subjectsData: SubjectData[] = [
       { id: "services-pr-2", title: "ПР №2", price: 1250, estimatedDays: 3 },
       { id: "services-pr-3", title: "ПР №3", price: 1250, estimatedDays: 3 },
       { id: "services-ikr", title: "ИКР", price: 1000, estimatedDays: 3 },
-      { id: "services-referat", title: "Реферат", price: 3000, estimatedDays: 3 }
+      { id: "services-referat", title: "Реферат", price: 3000, estimatedDays: 3 },
+      { id: "services-m2-pr-1", title: "Модуль 2. ПР №1", price: 1000, estimatedDays: 3 },
+      { id: "services-m2-pr-2", title: "Модуль 2. ПР №2", price: 1000, estimatedDays: 3 },
+      { id: "services-m2-pr-3", title: "Модуль 2. ПР №3", price: 1000, estimatedDays: 3 },
+      { id: "services-m2-pr-4", title: "Модуль 2. ПР №4", price: 1250, estimatedDays: 3 }
     ]
   }
   ,
@@ -352,9 +357,9 @@ export const subjectsData: SubjectData[] = [
     works: [
       { id: "process-pr-1", title: "ПР №1", price: 2500, estimatedDays: 3 },
       { id: "process-pr-2", title: "ПР №2", price: 1250, estimatedDays: 3 },
-      { id: "process-pr-3", title: "ПР №3", estimatedDays: 3 },
-      { id: "process-pr-4", title: "ПР №4", estimatedDays: 3 },
-      { id: "process-ikr", title: "ИКР", estimatedDays: 3 },
+      { id: "process-pr-3", title: "ПР №3", price: 1500, estimatedDays: 3 },
+      { id: "process-pr-4", title: "ПР №4", price: 2000, estimatedDays: 3 },
+      { id: "process-ikr", title: "ИКР", price: 1000, estimatedDays: 3 },
       { id: "process-referat", title: "Реферат", price: 3000, estimatedDays: 3 }
     ]
   }
