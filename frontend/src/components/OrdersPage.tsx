@@ -33,13 +33,13 @@ import { format, differenceInDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useTelegramWebApp } from '../hooks/useTelegramWebApp';
 
-const statusConfig = {
-  [OrderStatus.NEW]: { color: 'info' as const, label: 'Новый', icon: '🆕', progress: 10 },
-  [OrderStatus.WAITING_PAYMENT]: { color: 'warning' as const, label: 'Ожидание оплаты', icon: '💰', progress: 20 },
-  [OrderStatus.PAID]: { color: 'primary' as const, label: 'Оплачен', icon: '💳', progress: 40 },
-  [OrderStatus.IN_PROGRESS]: { color: 'secondary' as const, label: 'В работе', icon: '⚙️', progress: 70 },
-  [OrderStatus.COMPLETED]: { color: 'success' as const, label: 'Выполнен', icon: '✅', progress: 100 },
-  [OrderStatus.NEEDS_REVISION]: { color: 'error' as const, label: 'Нужны исправления', icon: '🔄', progress: 80 },
+const statusConfig: Partial<Record<OrderStatus, { color: any; label: string; icon: string; progress: number }>> = {
+  [OrderStatus.NEW]: { color: 'info', label: 'Новый', icon: '🆕', progress: 10 },
+  [OrderStatus.WAITING_PAYMENT]: { color: 'warning', label: 'Ожидание оплаты', icon: '💰', progress: 20 },
+  [OrderStatus.PAID]: { color: 'primary', label: 'Оплачен', icon: '💳', progress: 40 },
+  [OrderStatus.IN_PROGRESS]: { color: 'secondary', label: 'В работе', icon: '⚙️', progress: 70 },
+  [OrderStatus.COMPLETED]: { color: 'success', label: 'Выполнен', icon: '✅', progress: 100 },
+  [OrderStatus.NEEDS_REVISION]: { color: 'error', label: 'Нужны исправления', icon: '🔄', progress: 80 },
 };
 
 const OrdersPage: React.FC = () => {
