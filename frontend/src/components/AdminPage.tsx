@@ -40,12 +40,16 @@ const statusColors = {
   [OrderStatus.COMPLETED]: 'success',
 } as const;
 
-const statusLabels = {
+const statusLabels: Record<OrderStatus, string> = {
   [OrderStatus.NEW]: 'Новый',
   [OrderStatus.WAITING_PAYMENT]: 'Ожидание оплаты',
   [OrderStatus.PAID]: 'Оплачен',
   [OrderStatus.IN_PROGRESS]: 'В работе',
   [OrderStatus.COMPLETED]: 'Выполнен',
+  // Дополнительные статусы из enum (неиспользуемые сейчас, но нужны для типобезопасности)
+  [OrderStatus.NEEDS_REVISION]: 'Нужны исправления',
+  [OrderStatus.QUEUED]: 'В очереди',
+  [OrderStatus.UNDER_REVIEW]: 'На рассмотрении',
 };
 
 const AdminPage: React.FC = () => {
