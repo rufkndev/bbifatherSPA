@@ -104,15 +104,6 @@ function App() {
                 }
               }}
             />
-            <Button
-              component={Link}
-              to="/board"
-              variant="outlined"
-              size="small"
-              sx={{ display: { xs: 'none', sm: 'flex' }, fontWeight: 600 }}
-            >
-              Доска заказов
-            </Button>
           </Toolbar>
         </Container>
       </AppBar>

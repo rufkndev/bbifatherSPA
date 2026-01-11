@@ -116,6 +116,38 @@ const CreateOrderPage: React.FC = () => {
     }
   };
 
+  const isFormValid = () => {
+    // Курс/семестр
+    if (!(formData.courseId > 0 || formData.isCustom)) return false;
+    if (!formData.isCustom && formData.courseId !== 0 && formData.semesterId <= 0) return false;
+
+    // Предмет/кастом
+    const isSpecialCourse = formData.courseId === 1 || (formData.courseId === 2 && formData.semesterId === 3);
+    if (!formData.isCustom && !isSpecialCourse && !formData.subjectId) return false;
+
+    // Работы
+    if (formData.isCustom || isSpecialCourse) {
+      if (formData.customSubject.trim() === '' || formData.customWorksList.length === 0) return false;
+    } else {
+      const selectedSubject = getSubjectById(formData.subjectId);
+      if (selectedSubject?.isCustomForm) {
+        if (formData.customWorksList.length === 0) return false;
+      } else if (!formData.isFullCourse && formData.selectedWorks.length === 0) {
+        return false;
+      }
+    }
+
+    // Данные студента
+    return (
+      formData.studentName.trim() !== '' &&
+      formData.studentGroup.trim() !== '' &&
+      formData.studentTelegram.trim() !== '' &&
+      formData.deadline.trim() !== '' &&
+      formData.inputData.trim() !== '' &&
+      formData.variantInfo.trim() !== ''
+    );
+  };
+
   const canProceedToNextStep = () => {
     switch (activeStep) {
       case 0: // Выбор курса
@@ -145,7 +177,8 @@ const CreateOrderPage: React.FC = () => {
           formData.studentGroup.trim() !== '' &&
           formData.studentTelegram.trim() !== '' &&
           formData.deadline.trim() !== '' &&
-          formData.inputData.trim() !== ''
+          formData.inputData.trim() !== '' &&
+          formData.variantInfo.trim() !== ''
         );
       case 5: // Подтверждение
         return true;
@@ -192,6 +225,17 @@ const CreateOrderPage: React.FC = () => {
       isFullCourse: false,
     }));
     setActiveStep(2);
+  };
+
+  const handleSelectSubject = (subjectId: string) => {
+    const shouldSkipWorks = formData.isCustom || formData.courseId === 1 || (formData.courseId === 2 && formData.semesterId === 3);
+    setFormData(prev => ({
+      ...prev,
+      subjectId,
+      selectedWorks: [],
+      isFullCourse: false,
+    }));
+    setActiveStep(shouldSkipWorks ? 4 : 3);
   };
 
   const handleBack = () => {
@@ -255,6 +299,10 @@ const CreateOrderPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    if (!isFormValid()) {
+      setError('Заполните все обязательные поля');
+      return;
+    }
     setError('');
     if (loading) return; // защита от двойного клика
     setLoading(true);
@@ -699,7 +747,7 @@ const CreateOrderPage: React.FC = () => {
                         boxShadow: '0 8px 25px rgba(37, 99, 235, 0.2)'
                       } : {})
                     }}
-                    onClick={() => setFormData(prev => ({ ...prev, subjectId: subject.id }))}
+                    onClick={() => handleSelectSubject(subject.id)}
                   >
                     <CardContent sx={{ p: 3 }}>
                       <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 2 }}>
@@ -1285,7 +1333,7 @@ const CreateOrderPage: React.FC = () => {
             <Button
               variant="contained"
               onClick={handleSubmit}
-              disabled={loading || !canProceedToNextStep()}
+              disabled={loading || !isFormValid()}
               startIcon={loading ? <CircularProgress size={20} /> : <CheckCircle />}
               size="large"
               sx={{ 

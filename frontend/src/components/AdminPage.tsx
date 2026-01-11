@@ -40,16 +40,36 @@ const statusColors = {
   [OrderStatus.COMPLETED]: 'success',
 } as const;
 
-const statusLabels: Record<OrderStatus, string> = {
+const statusLabels: Partial<Record<OrderStatus, string>> = {
   [OrderStatus.NEW]: 'Новый',
   [OrderStatus.WAITING_PAYMENT]: 'Ожидание оплаты',
   [OrderStatus.PAID]: 'Оплачен',
   [OrderStatus.IN_PROGRESS]: 'В работе',
   [OrderStatus.COMPLETED]: 'Выполнен',
-  // Дополнительные статусы из enum (неиспользуемые сейчас, но нужны для типобезопасности)
-  [OrderStatus.NEEDS_REVISION]: 'Нужны исправления',
-  [OrderStatus.QUEUED]: 'В очереди',
-  [OrderStatus.UNDER_REVIEW]: 'На рассмотрении',
+};
+
+const allowedStatuses: OrderStatus[] = [
+  OrderStatus.NEW,
+  OrderStatus.WAITING_PAYMENT,
+  OrderStatus.PAID,
+  OrderStatus.IN_PROGRESS,
+  OrderStatus.COMPLETED,
+];
+
+const statusChip: Partial<Record<OrderStatus, { bg: string; color: string }>> = {
+  [OrderStatus.NEW]: { bg: 'rgba(148,163,184,0.2)', color: '#475569' },
+  [OrderStatus.WAITING_PAYMENT]: { bg: 'rgba(234,179,8,0.2)', color: '#a16207' },
+  [OrderStatus.PAID]: { bg: 'rgba(14,165,233,0.2)', color: '#0ea5e9' },
+  [OrderStatus.IN_PROGRESS]: { bg: 'rgba(99,102,241,0.2)', color: '#6366f1' },
+  [OrderStatus.COMPLETED]: { bg: 'rgba(16,185,129,0.2)', color: '#059669' },
+};
+
+const rowBg: Partial<Record<OrderStatus, string>> = {
+  [OrderStatus.NEW]: 'rgba(148,163,184,0.06)',
+  [OrderStatus.WAITING_PAYMENT]: 'rgba(234,179,8,0.06)',
+  [OrderStatus.PAID]: 'rgba(14,165,233,0.06)',
+  [OrderStatus.IN_PROGRESS]: 'rgba(99,102,241,0.06)',
+  [OrderStatus.COMPLETED]: 'rgba(16,185,129,0.08)',
 };
 
 const AdminPage: React.FC = () => {
@@ -71,6 +91,8 @@ const AdminPage: React.FC = () => {
   const [inputDataInput, setInputDataInput] = useState<string>('');
   const [variantInfoInput, setVariantInfoInput] = useState<string>('');
   const [deadlineInput, setDeadlineInput] = useState<string>('');
+  const [studentNameInput, setStudentNameInput] = useState<string>('');
+  const [studentGroupInput, setStudentGroupInput] = useState<string>('');
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -113,6 +135,8 @@ const AdminPage: React.FC = () => {
     setInputDataInput(order.input_data || '');
     setVariantInfoInput(order.variant_info || '');
     setDeadlineInput(order.deadline ? order.deadline.split('T')[0] : '');
+    setStudentNameInput(order.student?.name || '');
+    setStudentGroupInput(order.student?.group || '');
   };
 
   const handleStatusUpdate = async () => {
@@ -141,6 +165,8 @@ const AdminPage: React.FC = () => {
         input_data: inputDataInput,
         variant_info: variantInfoInput,
         deadline: deadlineInput,
+        student_name: studentNameInput,
+        student_group: studentGroupInput,
         actual_price: parsedPrice,
         payout_amount: parsedPayout,
         executor_telegram: executorInput.trim() ? executorInput.trim().replace('@', '') : null,
@@ -386,6 +412,29 @@ const AdminPage: React.FC = () => {
           >
             Все заказы ({orders.length})
           </Typography>
+
+          {/* Статистика по статусам */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            {allowedStatuses.map((status) => (
+              <Grid item xs={12} sm={6} md={3} lg={2} key={status}>
+                <Card
+                  sx={{
+                    border: '1px solid #e2e8f0',
+                    background: 'rgba(37,99,235,0.04)',
+                  }}
+                >
+                  <CardContent sx={{ py: 1.5, px: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {statusLabels[status]}
+                    </Typography>
+                    <Typography variant="h5" sx={{ fontWeight: 700, color: '#2563eb' }}>
+                      {orders.filter(o => o.status === status).length}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
           
           <TableContainer 
             component={Paper}
@@ -394,10 +443,10 @@ const AdminPage: React.FC = () => {
               background: '#ffffff',
               border: '1px solid #e2e8f0',
               boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-              overflow: 'auto',
+              overflowX: 'auto',
             }}
           >
-            <Table sx={{ minWidth: 800 }}>
+            <Table sx={{ minWidth: 600, tableLayout: 'fixed' }}>
               <TableHead>
                 <TableRow
                   sx={{
@@ -409,14 +458,15 @@ const AdminPage: React.FC = () => {
                       borderBottom: '2px solid #1e40af',
                       py: 2,
                       px: 2,
-                      whiteSpace: 'nowrap',
+                      whiteSpace: 'normal',
+                      wordBreak: 'break-word',
                     }
                   }}
                 >
                   <TableCell>ID</TableCell>
                   <TableCell>Студент</TableCell>
                   <TableCell>Группа</TableCell>
-                  <TableCell sx={{ minWidth: 250 }}>Название</TableCell>
+                  <TableCell sx={{ minWidth: 160 }}>Название</TableCell>
                   <TableCell>Предмет</TableCell>
                   <TableCell>Дедлайн</TableCell>
                   <TableCell>Цена</TableCell>
@@ -434,32 +484,32 @@ const AdminPage: React.FC = () => {
                     onClick={() => handleOrderClick(order)}
                     sx={{ 
                       cursor: 'pointer',
-                      background: index % 2 === 0 
-                        ? '#ffffff' 
-                        : 'rgba(37, 99, 235, 0.02)',
+                      background: rowBg[order.status] || (index % 2 === 0 ? '#ffffff' : 'rgba(37, 99, 235, 0.02)'),
                       transition: 'all 0.2s ease',
                       '&:hover': {
-                        background: 'rgba(37, 99, 235, 0.05)',
+                        background: rowBg[order.status] || 'rgba(37, 99, 235, 0.05)',
                       },
                       '& .MuiTableCell-root': {
                         borderBottom: '1px solid #e2e8f0',
                         py: 2,
                         px: 2,
                         fontWeight: 500,
+                        whiteSpace: 'normal',
+                        wordBreak: 'break-word',
                       }
                     }}
                   >
                     <TableCell sx={{ fontWeight: 700, color: '#2563eb', whiteSpace: 'nowrap' }}>
                       #{order.id}
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>
+                    <TableCell sx={{ fontWeight: 600, color: '#374151' }}>
                       {order.student?.name}
                     </TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{order.student?.group || '-'}</TableCell>
+                    <TableCell>{order.student?.group || '-'}</TableCell>
                     <TableCell 
                       sx={{ 
-                        minWidth: 250,
-                        maxWidth: 300,
+                        minWidth: 160,
+                        maxWidth: 240,
                         fontWeight: 600,
                         color: '#1f2937',
                         wordBreak: 'break-word',
@@ -469,42 +519,28 @@ const AdminPage: React.FC = () => {
                     >
                       {order.title}
                     </TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{order.subject?.name}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                    <TableCell>{order.subject?.name}</TableCell>
+                    <TableCell>
                       {format(new Date(order.deadline), 'dd.MM.yyyy', { locale: ru })}
                     </TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
+                    <TableCell sx={{ fontWeight: 600 }}>
                       {order.actual_price ?? order.subject?.price ?? 0} ₽
                     </TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap', color: '#059669', fontWeight: 600 }}>
+                    <TableCell sx={{ color: '#059669', fontWeight: 600 }}>
                       {order.payout_amount != null ? `${order.payout_amount} ₽` : '—'}
                     </TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <TableCell sx={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {order.executor_telegram ? `@${order.executor_telegram}` : '—'}
                     </TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                    <TableCell>
                       <Chip
-                        label={statusLabels[order.status]}
+                        label={statusLabels[order.status] || order.status}
                         sx={{
                           fontWeight: 600,
                           fontSize: '0.8rem',
-                          background: order.status === OrderStatus.COMPLETED
-                            ? 'rgba(16, 185, 129, 0.1)'
-                            : order.status === OrderStatus.NEEDS_REVISION
-                            ? 'rgba(239, 68, 68, 0.1)'
-                            : 'rgba(37, 99, 235, 0.1)',
-                          color: order.status === OrderStatus.COMPLETED
-                            ? '#059669'
-                            : order.status === OrderStatus.NEEDS_REVISION
-                            ? '#dc2626'
-                            : '#2563eb',
-                          border: `1px solid ${
-                            order.status === OrderStatus.COMPLETED
-                              ? '#10b981'
-                              : order.status === OrderStatus.NEEDS_REVISION
-                              ? '#ef4444'
-                              : '#2563eb'
-                          }33`,
+                          background: statusChip[order.status]?.bg || 'rgba(37,99,235,0.1)',
+                          color: statusChip[order.status]?.color || '#2563eb',
+                          border: 'none',
                         }}
                       />
                     </TableCell>
@@ -567,12 +603,20 @@ const AdminPage: React.FC = () => {
               
               <Grid container spacing={2} sx={{ mb: 1 }}>
                 <Grid item xs={12} md={6}>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    <strong>Студент:</strong> {selectedOrder.student?.name}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    <strong>Группа:</strong> {selectedOrder.student?.group || 'Не указана'}
-                  </Typography>
+                  <TextField
+                    fullWidth
+                    label="Студент (ФИО)"
+                    value={studentNameInput}
+                    onChange={(e) => setStudentNameInput(e.target.value)}
+                    sx={{ mb: 2 }}
+                  />
+                  <TextField
+                    fullWidth
+                    label="Группа"
+                    value={studentGroupInput}
+                    onChange={(e) => setStudentGroupInput(e.target.value)}
+                    sx={{ mb: 2 }}
+                  />
                   <Typography variant="body2" color="text.secondary" gutterBottom>
                     <strong>Telegram:</strong> @{selectedOrder.student?.telegram || 'не указан'}
                   </Typography>
@@ -669,16 +713,16 @@ const AdminPage: React.FC = () => {
                   </Button>
                 </Box>
 
-                <FormControl fullWidth sx={{ mb: 2 }}>
+                  <FormControl fullWidth sx={{ mb: 2 }}>
                   <InputLabel>Статус</InputLabel>
                   <Select
                     value={newStatus}
                     onChange={(e) => setNewStatus(e.target.value as OrderStatus)}
                     label="Статус"
                   >
-                    {Object.entries(statusLabels).map(([value, label]) => (
+                    {allowedStatuses.map((value) => (
                       <MenuItem key={value} value={value}>
-                        {label}
+                        {statusLabels[value]}
                       </MenuItem>
                     ))}
                   </Select>

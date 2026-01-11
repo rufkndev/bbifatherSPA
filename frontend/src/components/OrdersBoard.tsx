@@ -17,29 +17,66 @@ import {
   Divider,
 } from '@mui/material';
 import { CloudUpload } from '@mui/icons-material';
-import { getAllOrders, updateOrderExecutor, updateOrderAdmin, updateOrderStatus, uploadOrderFiles } from '../api';
+import { getAllOrders, updateOrderExecutor, updateOrderAdmin, uploadOrderFiles } from '../api';
 import { Order, OrderStatus } from '../types';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
-const statusLabels: Record<OrderStatus, string> = {
+const statusLabels: Partial<Record<OrderStatus, string>> = {
   [OrderStatus.NEW]: 'Новый',
   [OrderStatus.WAITING_PAYMENT]: 'Ожидание оплаты',
   [OrderStatus.PAID]: 'Оплачен',
   [OrderStatus.IN_PROGRESS]: 'В работе',
   [OrderStatus.COMPLETED]: 'Выполнен',
-  // Дополнительные статусы из enum (на будущее)
-  [OrderStatus.NEEDS_REVISION]: 'Нужны исправления',
-  [OrderStatus.QUEUED]: 'В очереди',
-  [OrderStatus.UNDER_REVIEW]: 'На рассмотрении',
+};
+
+const allowedStatuses: OrderStatus[] = [
+  OrderStatus.NEW,
+  OrderStatus.WAITING_PAYMENT,
+  OrderStatus.PAID,
+  OrderStatus.IN_PROGRESS,
+  OrderStatus.COMPLETED,
+];
+
+const statusBg: Partial<Record<OrderStatus, string>> = {
+  [OrderStatus.NEW]: 'rgba(148, 163, 184, 0.12)',
+  [OrderStatus.WAITING_PAYMENT]: 'rgba(234, 179, 8, 0.12)',
+  [OrderStatus.PAID]: 'rgba(14, 165, 233, 0.12)',
+  [OrderStatus.IN_PROGRESS]: 'rgba(99, 102, 241, 0.12)',
+  [OrderStatus.COMPLETED]: 'rgba(16, 185, 129, 0.15)',
+};
+
+const statusChip: Partial<Record<OrderStatus, { bg: string; color: string }>> = {
+  [OrderStatus.NEW]: { bg: 'rgba(148,163,184,0.2)', color: '#475569' },
+  [OrderStatus.WAITING_PAYMENT]: { bg: 'rgba(234,179,8,0.2)', color: '#a16207' },
+  [OrderStatus.PAID]: { bg: 'rgba(14,165,233,0.2)', color: '#0ea5e9' },
+  [OrderStatus.IN_PROGRESS]: { bg: 'rgba(99,102,241,0.2)', color: '#6366f1' },
+  [OrderStatus.COMPLETED]: { bg: 'rgba(16,185,129,0.2)', color: '#059669' },
 };
 
 const OrdersBoard: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [myTelegram, setMyTelegram] = useState<string>('');
+  const [filterExecutor, setFilterExecutor] = useState<string>('');
+  const [authorized, setAuthorized] = useState<boolean>(false);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('board_pass');
+    if (saved === 'Admin321') {
+      setAuthorized(true);
+      return;
+    }
+    const input = window.prompt('Введите пароль для доступа к доске заказов');
+    if (input === 'Admin321') {
+      localStorage.setItem('board_pass', 'Admin321');
+      setAuthorized(true);
+    } else {
+      setAuthorized(false);
+    }
+  }, []);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -70,19 +107,6 @@ const OrdersBoard: React.FC = () => {
     } catch (e) {
       console.error('Ошибка назначения исполнителя', e);
       alert('Не удалось назначить исполнителя');
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const handleRelease = async (orderId: number) => {
-    setUpdatingId(orderId);
-    try {
-      const updated = await updateOrderExecutor(orderId, null);
-      setOrders(prev => prev.map(o => (o.id === updated.id ? updated : o)));
-    } catch (e) {
-      console.error('Ошибка снятия исполнителя', e);
-      alert('Не удалось снять исполнителя');
     } finally {
       setUpdatingId(null);
     }
@@ -123,6 +147,19 @@ const OrdersBoard: React.FC = () => {
     );
   }
 
+  if (!authorized) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
+        <Typography variant="h6">Доступ к доске ограничен</Typography>
+      </Box>
+    );
+  }
+
+  const filteredOrders = orders.filter(o => {
+    if (!filterExecutor.trim()) return true;
+    return (o.executor_telegram || '').toLowerCase().includes(filterExecutor.trim().replace('@', '').toLowerCase());
+  });
+
   return (
     <Box sx={{ maxWidth: 1400, mx: 'auto', px: { xs: 1, sm: 3 }, py: { xs: 2, sm: 4 } }}>
       <Card sx={{ mb: 3 }}>
@@ -138,6 +175,13 @@ const OrdersBoard: React.FC = () => {
               placeholder="@username"
               sx={{ maxWidth: 260 }}
             />
+            <TextField
+              label="Фильтр по исполнителю"
+              value={filterExecutor}
+              onChange={(e) => setFilterExecutor(e.target.value)}
+              placeholder="@executor"
+              sx={{ maxWidth: 260 }}
+            />
             <Button variant="outlined" onClick={loadOrders}>
               Обновить
             </Button>
@@ -146,9 +190,9 @@ const OrdersBoard: React.FC = () => {
       </Card>
 
       <Grid container spacing={2}>
-        {orders.map((order) => (
+        {filteredOrders.map((order) => (
           <Grid item xs={12} md={6} lg={4} key={order.id}>
-            <Card sx={{ height: '100%' }}>
+            <Card sx={{ height: '100%', background: statusBg[order.status] || 'background.paper' }}>
               <CardContent>
                 <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
                   <Typography variant="h6" sx={{ fontWeight: 700 }}>
@@ -156,8 +200,12 @@ const OrdersBoard: React.FC = () => {
                   </Typography>
                   <Chip
                     label={statusLabels[order.status] || order.status}
-                    color="primary"
                     size="small"
+                    sx={{
+                      backgroundColor: statusChip[order.status]?.bg || 'rgba(37,99,235,0.12)',
+                      color: statusChip[order.status]?.color || '#2563eb',
+                      fontWeight: 700,
+                    }}
                   />
                 </Stack>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -175,24 +223,26 @@ const OrdersBoard: React.FC = () => {
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
                   К выплате: {order.payout_amount != null ? `${order.payout_amount} ₽` : '—'}
                 </Typography>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Доп. требования: {order.input_data || '—'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Инфо о варианте: {order.variant_info || '—'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Описание: {order.description || '—'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Файлы: {order.files?.length || 0}
+                </Typography>
 
                 <Divider sx={{ my: 1.5 }} />
                 <Typography variant="body2" gutterBottom>
-                  Исполнитель: {order.executor_telegram ? `@${order.executor_telegram}` : '—'}
+                  Исполнитель: {order.executor_telegram ? `@${order.executor_telegram} (забран)` : '—'}
                 </Typography>
 
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  {order.executor_telegram ? (
-                    <Button
-                      variant="outlined"
-                      color="error"
-                      size="small"
-                      disabled={updatingId === order.id}
-                      onClick={() => handleRelease(order.id!)}
-                    >
-                      Снять исполнителя
-                    </Button>
-                  ) : (
+                  {!order.executor_telegram && order.status !== OrderStatus.COMPLETED && (
                     <Button
                       variant="contained"
                       size="small"
@@ -211,9 +261,9 @@ const OrdersBoard: React.FC = () => {
                       onChange={(e) => handleStatusChange(order.id!, e.target.value as OrderStatus)}
                       disabled={updatingId === order.id}
                     >
-                      {Object.entries(statusLabels).map(([val, label]) => (
+                      {allowedStatuses.map((val) => (
                         <MenuItem key={val} value={val}>
-                          {label}
+                          {statusLabels[val]}
                         </MenuItem>
                       ))}
                     </Select>

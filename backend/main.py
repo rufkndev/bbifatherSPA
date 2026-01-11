@@ -1062,11 +1062,31 @@ async def update_order_admin(order_id: int, request: Request):
     try:
         data = await request.json()
         update_payload = {}
+        student_update = {}
+
+        # Получаем student_id для обновления данных студента при необходимости
+        try:
+            student_resp = supabase.table('orders').select('student_id, status').eq('id', order_id).single().execute()
+            if not student_resp.data:
+                raise HTTPException(status_code=404, detail="Заказ не найден")
+            student_id = student_resp.data['student_id']
+            old_status = student_resp.data.get('status')
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"❌ Ошибка получения student_id для заказа {order_id}: {e}")
+            raise HTTPException(status_code=500, detail="Не удалось получить данные студента")
 
         # Простые поля
         for field in ['title', 'description', 'input_data', 'variant_info', 'deadline']:
             if field in data:
                 update_payload[field] = data[field]
+
+        # Обновление имени и группы студента
+        if 'student_name' in data:
+            student_update['name'] = data.get('student_name')
+        if 'student_group' in data:
+            student_update['group_name'] = data.get('student_group')
 
         # subject_id смена
         if 'subject_id' in data:
@@ -1114,7 +1134,7 @@ async def update_order_admin(order_id: int, request: Request):
             except Exception:
                 raise HTTPException(status_code=400, detail="Некорректная сумма к выплате")
 
-        if not update_payload:
+        if not update_payload and not student_update:
             raise HTTPException(status_code=400, detail="Нет данных для обновления")
 
         update_payload['updated_at'] = datetime.now().isoformat()
@@ -1123,7 +1143,18 @@ async def update_order_admin(order_id: int, request: Request):
         if not response.data:
             raise HTTPException(status_code=404, detail="Заказ не найден")
 
+        if student_update:
+            supabase.table('students').update(student_update).eq('id', student_id).execute()
+
         updated_order = get_order(order_id)
+
+        # Уведомление о переходе в ожидание оплаты
+        try:
+            if old_status != updated_order.get('status') and updated_order.get('status') == 'waiting_payment':
+                await send_status_notification_to_user(updated_order, 'waiting_payment')
+        except Exception as e:
+            print(f"⚠️ Ошибка отправки уведомления (waiting_payment): {e}")
+
         return updated_order
 
     except HTTPException:
