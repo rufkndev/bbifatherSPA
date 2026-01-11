@@ -22,12 +22,16 @@ import { Order, OrderStatus } from '../types';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
-const statusLabels = {
+const statusLabels: Record<OrderStatus, string> = {
   [OrderStatus.NEW]: 'Новый',
   [OrderStatus.WAITING_PAYMENT]: 'Ожидание оплаты',
   [OrderStatus.PAID]: 'Оплачен',
   [OrderStatus.IN_PROGRESS]: 'В работе',
   [OrderStatus.COMPLETED]: 'Выполнен',
+  // Дополнительные статусы из enum (на будущее)
+  [OrderStatus.NEEDS_REVISION]: 'Нужны исправления',
+  [OrderStatus.QUEUED]: 'В очереди',
+  [OrderStatus.UNDER_REVIEW]: 'На рассмотрении',
 };
 
 const OrdersBoard: React.FC = () => {
