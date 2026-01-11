@@ -32,69 +32,81 @@
     
     <title>BBI Father - Система заказов работ</title>
     
-    <!-- Скрипт принудительного обновления для Telegram WebApp -->
+    <!-- Скрипт принудительного обновления для всех клиентов (включая браузер) -->
     <script>
-      // Принудительное обновление для Telegram WebApp
-      if (window.Telegram && window.Telegram.WebApp) {
-        // Добавляем версию в localStorage для отслеживания обновлений
-        const currentVersion = '%REACT_APP_VERSION%';
+      (function() {
+        const resolvePlaceholder = (value, fallback) => {
+          return value && value.trim() !== '' ? value : fallback;
+        };
+
+        const currentVersion = resolvePlaceholder('%REACT_APP_VERSION%', String(Date.now()));
+        const buildTime = resolvePlaceholder('%REACT_APP_BUILD_TIME%', '');
+
+        // Сохраняем версию глобально, чтобы переиспользовать ниже
+        window.__APP_VERSION__ = currentVersion;
+        window.__APP_BUILD_TIME__ = buildTime;
+
         const storedVersion = localStorage.getItem('app-version');
-        
+
         if (storedVersion && storedVersion !== currentVersion) {
-          console.log('Обнаружено обновление приложения, очищаем кеш');
-          
+          console.log('Обнаружено обновление приложения, очищаем локальные данные');
+
           // Очищаем localStorage (кроме важных данных)
           const importantKeys = ['telegramUser'];
-          const oldValues = {};
+          const preserved = {};
           importantKeys.forEach(key => {
-            oldValues[key] = localStorage.getItem(key);
+            preserved[key] = localStorage.getItem(key);
           });
-          
+
           localStorage.clear();
-          
+
           // Восстанавливаем важные данные
           importantKeys.forEach(key => {
-            if (oldValues[key]) {
-              localStorage.setItem(key, oldValues[key]);
+            if (preserved[key]) {
+              localStorage.setItem(key, preserved[key]);
             }
           });
-          
+
           // Принудительная перезагрузка
-          window.location.reload(true);
+          window.location.reload();
         }
-        
+
         localStorage.setItem('app-version', currentVersion);
-      }
+      })();
     </script>
     
     <!-- Регистрация Service Worker для управления кешем -->
     <script>
-      // Регистрируем Service Worker для Telegram WebApp
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          const swUrl = '/sw.js?v=%REACT_APP_VERSION%';
+          const appVersion = (window.__APP_VERSION__ && String(window.__APP_VERSION__)) || '%REACT_APP_VERSION%' || String(Date.now());
+          const swUrl = `/sw.js?v=${appVersion}`;
+
           navigator.serviceWorker.register(swUrl)
             .then(registration => {
               console.log('Service Worker зарегистрирован:', registration.scope);
-              
+
+              let refreshing = false;
+              navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (refreshing) return;
+                refreshing = true;
+                window.location.reload();
+              });
+
               // Проверяем обновления каждые 30 секунд
               setInterval(() => {
                 registration.update();
               }, 30000);
-              
+
               // Слушаем обновления Service Worker
               registration.addEventListener('updatefound', () => {
                 const newWorker = registration.installing;
+                if (!newWorker) return;
+
                 newWorker.addEventListener('statechange', () => {
                   if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    // Новая версия доступна
-                    console.log('Новая версия приложения доступна');
-                    
-                    // В Telegram WebApp принудительно перезагружаемся
-                    if (window.Telegram && window.Telegram.WebApp) {
-                      newWorker.postMessage({ type: 'SKIP_WAITING' });
-                      window.location.reload();
-                    }
+                    console.log('Новая версия приложения доступна, активируем...');
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
                   }
                 });
               });

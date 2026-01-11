@@ -26,6 +26,29 @@ export const getOrders = async (page: number = 1, limit: number = 10, telegram?:
   return response.data;
 };
 
+// Получить все заказы без ограничения 100 записей (используется пагинация)
+export const getAllOrders = async (telegram?: string | null, pageSize: number = 200): Promise<Order[]> => {
+  const limit = Math.max(1, Math.min(pageSize, 1000)); // защитимся от слишком маленьких/больших значений
+  let page = 1;
+  let allOrders: Order[] = [];
+  let total = 0;
+
+  while (true) {
+    const response = await getOrders(page, limit, telegram ?? undefined);
+    allOrders = allOrders.concat(response.orders);
+    total = response.total || allOrders.length;
+
+    const fetchedCount = response.orders.length;
+    if (allOrders.length >= total || fetchedCount < limit) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return allOrders;
+};
+
 export const getOrder = async (id: number): Promise<Order> => {
   const response = await api.get(`/api/orders/${id}`);
   return response.data;
@@ -134,6 +157,25 @@ export const sendFilesToTelegram = async (orderId: number, telegram: string): Pr
 // Students API
 export const getStudents = async (): Promise<Student[]> => {
   const response = await api.get('/api/students');
+  return response.data;
+};
+
+// Админ: полное обновление заказа
+export const updateOrderAdmin = async (id: number, payload: Partial<Order>): Promise<Order> => {
+  const response = await api.patch(`/api/orders/${id}/admin`, payload);
+  return response.data;
+};
+
+// Админ/исполнитель: установка/снятие исполнителя и суммы к выплате
+export const updateOrderExecutor = async (
+  id: number,
+  executorTelegram: string | null,
+  payout?: number | null
+): Promise<Order> => {
+  const response = await api.patch(`/api/orders/${id}/executor`, {
+    executor_telegram: executorTelegram,
+    payout_amount: payout,
+  });
   return response.data;
 };
 

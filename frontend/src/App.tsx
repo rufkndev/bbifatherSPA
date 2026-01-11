@@ -8,7 +8,8 @@ import {
   Chip,
   IconButton,
   Container,
-  Badge
+  Badge,
+  Button
 } from '@mui/material';
 import { 
   Home,
@@ -18,6 +19,7 @@ import {
 import OrdersPage from './components/OrdersPage';
 import CreateOrderPage from './components/CreateOrderPage';
 import AdminPage from './components/AdminPage';
+import OrdersBoard from './components/OrdersBoard';
 
 function App() {
   const location = useLocation();
@@ -38,11 +40,12 @@ function App() {
   return (
     <Box 
       sx={{ 
-        flexGrow: 1, 
+        flexGrow: 1,
         minHeight: '100vh',
-        background: '#f8fafc',
-        // Убираем отступы для мобильной версии
-        pb: { xs: 8, sm: 2 }, // Добавляем отступ снизу на мобильных для bottom navigation
+        background: 'radial-gradient(circle at 10% 20%, rgba(59,130,246,0.08), transparent 25%), radial-gradient(circle at 80% 0%, rgba(16,185,129,0.08), transparent 22%), linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%)',
+        pb: { xs: 8, sm: 2 },
+        position: 'relative',
+        overflowX: 'hidden'
       }}
     >
       {/* Мобильная версия - компактный header */}
@@ -50,9 +53,10 @@ function App() {
         position="fixed" 
         elevation={0}
         sx={{ 
-          background: '#ffffff',
+          background: 'rgba(255,255,255,0.9)',
           borderBottom: '1px solid #e2e8f0',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+          boxShadow: '0 12px 30px rgba(15, 23, 42, 0.08)',
+          backdropFilter: 'blur(12px)',
           // Компактный для мобильных
           '& .MuiToolbar-root': {
             minHeight: { xs: 72, sm: 84 },
@@ -100,6 +104,15 @@ function App() {
                 }
               }}
             />
+            <Button
+              component={Link}
+              to="/board"
+              variant="outlined"
+              size="small"
+              sx={{ display: { xs: 'none', sm: 'flex' }, fontWeight: 600 }}
+            >
+              Доска заказов
+            </Button>
           </Toolbar>
         </Container>
       </AppBar>
@@ -115,6 +128,7 @@ function App() {
             <Route path="/" element={<OrdersPage />} />
             <Route path="/create" element={<CreateOrderPage />} />
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/board" element={<OrdersBoard />} />
           </Routes>
         </Container>
       </Box>

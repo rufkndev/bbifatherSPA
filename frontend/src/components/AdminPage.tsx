@@ -27,7 +27,7 @@ import {
   CircularProgress
 } from '@mui/material';
 import { Order, OrderStatus } from '../types';
-import { getOrders, updateOrderStatus, markOrderAsPaid, uploadOrderFiles, updateOrderPrice } from '../api';
+import { getAllOrders, updateOrderAdmin, markOrderAsPaid, uploadOrderFiles } from '../api';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
@@ -37,9 +37,6 @@ const statusColors = {
   [OrderStatus.PAID]: 'info',
   [OrderStatus.IN_PROGRESS]: 'secondary',
   [OrderStatus.COMPLETED]: 'success',
-  [OrderStatus.NEEDS_REVISION]: 'error',
-  [OrderStatus.QUEUED]: 'default',
-  [OrderStatus.UNDER_REVIEW]: 'info',
 } as const;
 
 const statusLabels = {
@@ -48,9 +45,6 @@ const statusLabels = {
   [OrderStatus.PAID]: 'Оплачен',
   [OrderStatus.IN_PROGRESS]: 'В работе',
   [OrderStatus.COMPLETED]: 'Выполнен',
-  [OrderStatus.NEEDS_REVISION]: 'Нужны исправления',
-  [OrderStatus.QUEUED]: 'В очереди',
-  [OrderStatus.UNDER_REVIEW]: 'На рассмотрении',
 };
 
 const AdminPage: React.FC = () => {
@@ -65,6 +59,13 @@ const AdminPage: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string>('');
   const [priceInput, setPriceInput] = useState<string>('');
+  const [payoutInput, setPayoutInput] = useState<string>('');
+  const [executorInput, setExecutorInput] = useState<string>('');
+  const [titleInput, setTitleInput] = useState<string>('');
+  const [descriptionInput, setDescriptionInput] = useState<string>('');
+  const [inputDataInput, setInputDataInput] = useState<string>('');
+  const [variantInfoInput, setVariantInfoInput] = useState<string>('');
+  const [deadlineInput, setDeadlineInput] = useState<string>('');
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -83,8 +84,8 @@ const AdminPage: React.FC = () => {
   const loadOrders = async () => {
     try {
       setLoading(true);
-      const response = await getOrders(1, 100); // Загружаем все заказы
-      setOrders(response.orders);
+      const allOrders = await getAllOrders(); // Загружаем все заказы без лимита 100
+      setOrders(allOrders);
     } catch (error) {
       console.error('Ошибка загрузки заказов:', error);
       setError('Не удалось загрузить заказы');
@@ -99,20 +100,58 @@ const AdminPage: React.FC = () => {
     setDialogOpen(true);
     const initialPrice = (order.actual_price ?? order.subject?.price ?? 0).toString();
     setPriceInput(initialPrice);
+    const initialPayout = (order.payout_amount ?? '').toString();
+    setPayoutInput(order.payout_amount != null ? initialPayout : '');
+    setExecutorInput(order.executor_telegram ? `@${order.executor_telegram}` : '');
+    setTitleInput(order.title || '');
+    setDescriptionInput(order.description || '');
+    setInputDataInput(order.input_data || '');
+    setVariantInfoInput(order.variant_info || '');
+    setDeadlineInput(order.deadline ? order.deadline.split('T')[0] : '');
   };
 
   const handleStatusUpdate = async () => {
+    await handleSaveAdmin();
+  };
+
+  const handleSaveAdmin = async () => {
     if (!selectedOrder || !selectedOrder.id) return;
 
     try {
-      const updatedOrder = await updateOrderStatus(selectedOrder.id, newStatus);
+      const parsedPrice = parseFloat(priceInput.replace(',', '.'));
+      if (isNaN(parsedPrice) || parsedPrice < 0) {
+        setError('Введите корректную стоимость');
+        return;
+      }
+
+      const parsedPayout = payoutInput.trim() === '' ? null : parseFloat(payoutInput.replace(',', '.'));
+      if (parsedPayout !== null && (isNaN(parsedPayout) || parsedPayout < 0)) {
+        setError('Введите корректную сумму к выплате');
+        return;
+      }
+
+      const payload = {
+        title: titleInput,
+        description: descriptionInput,
+        input_data: inputDataInput,
+        variant_info: variantInfoInput,
+        deadline: deadlineInput,
+        actual_price: parsedPrice,
+        payout_amount: parsedPayout,
+        executor_telegram: executorInput.trim() ? executorInput.trim().replace('@', '') : null,
+        status: newStatus,
+        is_paid: selectedOrder.is_paid,
+      };
+
+      const updatedOrder = await updateOrderAdmin(selectedOrder.id, payload);
       setOrders(prev => prev.map(order => 
         order.id === updatedOrder.id ? updatedOrder : order
       ));
+      setSelectedOrder(updatedOrder);
       setDialogOpen(false);
     } catch (error) {
-      console.error('Ошибка обновления статуса:', error);
-      setError('Не удалось обновить статус заказа');
+      console.error('Ошибка обновления заказа:', error);
+      setError('Не удалось сохранить изменения заказа');
     }
   };
 
@@ -146,25 +185,6 @@ const AdminPage: React.FC = () => {
       setError('Не удалось загрузить файлы');
     } finally {
       setUploading(false);
-    }
-  };
-
-  const handleSavePrice = async () => {
-    if (!selectedOrder || !selectedOrder.id) return;
-    const parsed = parseFloat(priceInput.replace(',', '.'));
-    if (isNaN(parsed) || parsed < 0) {
-      setError('Введите корректную стоимость');
-      return;
-    }
-    try {
-      const updatedOrder = await updateOrderPrice(selectedOrder.id, parsed);
-      setOrders(prev => prev.map(order => 
-        order.id === updatedOrder.id ? updatedOrder : order
-      ));
-      setSelectedOrder(updatedOrder);
-    } catch (e) {
-      console.error('Ошибка обновления цены:', e);
-      setError('Не удалось обновить стоимость заказа');
     }
   };
 
@@ -394,6 +414,9 @@ const AdminPage: React.FC = () => {
                   <TableCell sx={{ minWidth: 250 }}>Название</TableCell>
                   <TableCell>Предмет</TableCell>
                   <TableCell>Дедлайн</TableCell>
+                  <TableCell>Цена</TableCell>
+                  <TableCell>К выплате</TableCell>
+                  <TableCell>Исполнитель</TableCell>
                   <TableCell>Статус</TableCell>
                   <TableCell>Оплата</TableCell>
                   <TableCell>Создан</TableCell>
@@ -444,6 +467,15 @@ const AdminPage: React.FC = () => {
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{order.subject?.name}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       {format(new Date(order.deadline), 'dd.MM.yyyy', { locale: ru })}
+                    </TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
+                      {order.actual_price ?? order.subject?.price ?? 0} ₽
+                    </TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', color: '#059669', fontWeight: 600 }}>
+                      {order.payout_amount != null ? `${order.payout_amount} ₽` : '—'}
+                    </TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {order.executor_telegram ? `@${order.executor_telegram}` : '—'}
                     </TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       <Chip
@@ -516,45 +548,71 @@ const AdminPage: React.FC = () => {
         <DialogContent sx={{ pt: 2 }}>
           {selectedOrder && (
             <Box sx={{ pt: 2 }}>
-              <Typography variant="h6" gutterBottom sx={{ wordBreak: 'break-word' }}>
-                {selectedOrder.title}
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                Предмет: <strong>{selectedOrder.subject?.name || 'Не указан'}</strong>
               </Typography>
+
+              <TextField
+                fullWidth
+                label="Название"
+                value={titleInput}
+                onChange={(e) => setTitleInput(e.target.value)}
+                sx={{ mb: 2 }}
+              />
               
-              <Typography variant="body2" color="text.secondary" gutterBottom sx={{ wordBreak: 'break-word' }}>
-                <strong>Студент:</strong> {selectedOrder.student?.name}
-              </Typography>
-              
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                <strong>Группа:</strong> {selectedOrder.student?.group || 'Не указана'}
-              </Typography>
-              
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                <strong>Telegram:</strong> {selectedOrder.student?.telegram || 'Не указан'}
-              </Typography>
-              
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                <strong>Предмет:</strong> {selectedOrder.subject?.name}
-              </Typography>
-              
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                <strong>Дедлайн:</strong> {format(new Date(selectedOrder.deadline), 'dd.MM.yyyy', { locale: ru })}
-              </Typography>
-              
-              <Typography variant="body2" gutterBottom sx={{ mt: 2, wordBreak: 'break-word' }}>
-                <strong>Описание работы:</strong> {selectedOrder.description}
-              </Typography>
-              
-              {selectedOrder.variant_info && (
-                <Typography variant="body2" gutterBottom sx={{ mt: 1, wordBreak: 'break-word' }}>
-                  <strong>Информация о варианте:</strong> {selectedOrder.variant_info}
-                </Typography>
-              )}
-              
-              {selectedOrder.input_data && (
-                <Typography variant="body2" gutterBottom sx={{ mt: 1, wordBreak: 'break-word' }}>
-                  <strong>Дополнительные требования:</strong> {selectedOrder.input_data}
-                </Typography>
-              )}
+              <Grid container spacing={2} sx={{ mb: 1 }}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    <strong>Студент:</strong> {selectedOrder.student?.name}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    <strong>Группа:</strong> {selectedOrder.student?.group || 'Не указана'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    <strong>Telegram:</strong> @{selectedOrder.student?.telegram || 'не указан'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    type="date"
+                    label="Дедлайн"
+                    InputLabelProps={{ shrink: true }}
+                    value={deadlineInput}
+                    onChange={(e) => setDeadlineInput(e.target.value)}
+                  />
+                </Grid>
+              </Grid>
+
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                label="Описание работы"
+                value={descriptionInput}
+                onChange={(e) => setDescriptionInput(e.target.value)}
+                sx={{ mb: 2 }}
+              />
+
+              <TextField
+                fullWidth
+                multiline
+                rows={2}
+                label="Дополнительные требования"
+                value={inputDataInput}
+                onChange={(e) => setInputDataInput(e.target.value)}
+                sx={{ mb: 2 }}
+              />
+
+              <TextField
+                fullWidth
+                multiline
+                rows={2}
+                label="Информация о варианте"
+                value={variantInfoInput}
+                onChange={(e) => setVariantInfoInput(e.target.value)}
+                sx={{ mb: 2 }}
+              />
               
               {/* Информация об исправлениях */}
               {selectedOrder.status === OrderStatus.NEEDS_REVISION && (
@@ -576,7 +634,7 @@ const AdminPage: React.FC = () => {
               )}
               
               <Box sx={{ mt: 3 }}>
-                {/* Стоимость заказа */}
+                {/* Стоимость заказа и выплаты */}
                 <Box sx={{ mb: 2, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
                   <TextField
                     label="Стоимость, ₽"
@@ -586,12 +644,24 @@ const AdminPage: React.FC = () => {
                     sx={{ maxWidth: 240 }}
                     inputProps={{ step: '50', min: '0' }}
                   />
-                  <Button variant="contained" onClick={handleSavePrice}>
-                    Сохранить цену
+                  <TextField
+                    label="К выплате, ₽"
+                    type="number"
+                    value={payoutInput}
+                    onChange={(e) => setPayoutInput(e.target.value)}
+                    sx={{ maxWidth: 200 }}
+                    inputProps={{ step: '50', min: '0' }}
+                  />
+                  <TextField
+                    label="Исполнитель (telegram)"
+                    value={executorInput}
+                    onChange={(e) => setExecutorInput(e.target.value)}
+                    sx={{ maxWidth: 240 }}
+                    placeholder="@executor"
+                  />
+                  <Button variant="outlined" color="error" onClick={() => setExecutorInput('')}>
+                    Снять исполнителя
                   </Button>
-                  <Typography variant="body2" color="text.secondary">
-                    После сохранения статус будет "Ожидание оплаты" (если не оплачен)
-                  </Typography>
                 </Box>
 
                 <FormControl fullWidth sx={{ mb: 2 }}>
@@ -656,8 +726,8 @@ const AdminPage: React.FC = () => {
           <Button onClick={() => setDialogOpen(false)}>
             Отмена
           </Button>
-          <Button onClick={handleStatusUpdate} variant="contained">
-            Сохранить
+          <Button onClick={handleSaveAdmin} variant="contained">
+            Сохранить изменения
           </Button>
         </DialogActions>
       </Dialog>

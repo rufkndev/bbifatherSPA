@@ -362,20 +362,7 @@ export const subjectsData: SubjectData[] = [
       { id: "process-ikr", title: "ИКР", price: 1000, estimatedDays: 3 },
       { id: "process-referat", title: "Реферат", price: 3000, estimatedDays: 3 }
     ]
-  }
-  ,
-  {
-    id: "erp-ais",
-    name: "Архитектура прикладных информационных систем (ERP)",
-    description: "Практические работы по ERP",
-    course: 3,
-    semester: 5,
-    works: [
-      { id: "erp-pr-1", title: "ПР №1", price: 2500, estimatedDays: 3 },
-      { id: "erp-pr-2", title: "ПР №2", price: 2500, estimatedDays: 3 }
-    ]
-  }
-  ,
+  },
   {
     id: "knir-1",
     name: "КНИР 1",

@@ -28,7 +28,7 @@ import {
   Logout as LogoutIcon,
 } from '@mui/icons-material';
 import { Order, OrderStatus } from '../types';
-import { getOrders, downloadFile, downloadAllFiles, sendFilesToTelegram, api, requestOrderRevision } from '../api';
+import { getAllOrders, downloadFile, downloadAllFiles, sendFilesToTelegram, api, requestOrderRevision } from '../api';
 import { format, differenceInDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useTelegramWebApp } from '../hooks/useTelegramWebApp';
@@ -98,31 +98,42 @@ const OrdersPage: React.FC = () => {
     }
   }, [searchParams, setSearchParams, isInTelegram, user]);
 
+  const loadOrders = useCallback(async () => {
+    if (currentUser === null) {
+      setOrders([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const userToFetch = isAdminView ? null : currentUser;
+      const fetchedOrders = await getAllOrders(userToFetch);
+      setOrders(fetchedOrders);
+    } catch (error) {
+      console.error('Ошибка загрузки заказов:', error);
+      setOrders([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser, isAdminView]);
+
   // 2. Эффект для загрузки заказов, когда пользователь изменился
   useEffect(() => {
-    const fetchOrders = async () => {
-      if (currentUser === null) {
-          setOrders([]);
-          setLoading(false);
-          return;
-      };
+    loadOrders();
+  }, [loadOrders]);
 
-      setLoading(true);
-      try {
-        const userToFetch = isAdminView ? null : currentUser;
-        const response = await getOrders(1, 100, userToFetch);
-        setOrders(response.orders);
-      } catch (error) {
-        console.error('Ошибка загрузки заказов:', error);
-        setOrders([]);
-      } finally {
-        setLoading(false);
+  // 3. Автообновление при возвращении на вкладку (чтобы подтягивать новые цены/статусы)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadOrders();
       }
     };
-    
-    fetchOrders();
 
-  }, [currentUser, isAdminView]);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [loadOrders]);
 
   const handleLogin = () => {
     if (telegramInput) {
@@ -631,7 +642,7 @@ const OrdersPage: React.FC = () => {
                              fontSize: { xs: '0.8rem', sm: '0.875rem' }
                            }}
                          >
-                           <strong>Сумма:</strong> {order.actual_price || order.subject?.price} ₽
+                          <strong>Сумма:</strong> {order.actual_price ?? order.subject?.price ?? 0} ₽
                          </Typography>
                          
                          {!paymentNotifications.has(order.id!) && (

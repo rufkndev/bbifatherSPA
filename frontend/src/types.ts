@@ -50,6 +50,10 @@ export interface Order {
   // Связанные данные
   student?: Student;
   subject?: Subject;
+
+  // Исполнитель и выплаты
+  executor_telegram?: string | null;
+  payout_amount?: number | null;
 }
 
 export interface CreateOrderRequest {

@@ -79,7 +79,6 @@ const CreateOrderPage: React.FC = () => {
     inputData: '',
     variantInfo: '',
     deadline: '',
-    oneSDatabaseCredentials: '',
   });
 
   useEffect(() => {
@@ -141,16 +140,12 @@ const CreateOrderPage: React.FC = () => {
         }
         return formData.selectedWorks.length > 0 || formData.isFullCourse;
       case 4: // Данные студента
-        // Доп. требование для предмета ERP: обязательное поле "Логин:Пароль базы 1С"
-        const subjectForValidation = getSubjectById(formData.subjectId);
-        const isErp = subjectForValidation?.name === 'Архитектура прикладных информационных систем (ERP)';
         return (
           formData.studentName.trim() !== '' &&
           formData.studentGroup.trim() !== '' &&
           formData.studentTelegram.trim() !== '' &&
           formData.deadline.trim() !== '' &&
-          formData.inputData.trim() !== '' &&
-          (!isErp || formData.oneSDatabaseCredentials.trim() !== '')
+          formData.inputData.trim() !== ''
         );
       case 5: // Подтверждение
         return true;
@@ -174,6 +169,29 @@ const CreateOrderPage: React.FC = () => {
         setActiveStep((prevActiveStep) => prevActiveStep + 1);
       }
     }
+  };
+
+  const handleSelectCourse = (courseId: number) => {
+    setFormData(prev => ({
+      ...prev,
+      courseId,
+      semesterId: 0,
+      subjectId: '',
+      selectedWorks: [],
+      isFullCourse: false,
+    }));
+    setActiveStep(1);
+  };
+
+  const handleSelectSemester = (semesterId: number) => {
+    setFormData(prev => ({
+      ...prev,
+      semesterId,
+      subjectId: '',
+      selectedWorks: [],
+      isFullCourse: false,
+    }));
+    setActiveStep(2);
   };
 
   const handleBack = () => {
@@ -286,10 +304,6 @@ const CreateOrderPage: React.FC = () => {
         }
       }
 
-      const selectedSubjectSubmit = getSubjectById(formData.subjectId);
-      const isErpSubmit = selectedSubjectSubmit?.name === 'Архитектура прикладных информационных систем (ERP)';
-      const combinedInputData = `${formData.inputData}${isErpSubmit && formData.oneSDatabaseCredentials.trim() ? `\n1С логин:пароль: ${formData.oneSDatabaseCredentials}` : ''}`;
-
       const orderData = {
         student: {
           name: formData.studentName,
@@ -299,7 +313,7 @@ const CreateOrderPage: React.FC = () => {
         subject_id: finalSubjectId,
         title,
         description,
-        input_data: combinedInputData,
+        input_data: formData.inputData,
         variant_info: formData.variantInfo,
         deadline: formData.deadline,
         selected_works: formData.selectedWorks,
@@ -400,12 +414,7 @@ const CreateOrderPage: React.FC = () => {
                           boxShadow: '0 8px 25px rgba(37, 99, 235, 0.2)'
                         } : {})
                       }}
-                      onClick={() => setFormData(prev => ({ 
-                        ...prev, 
-                        courseId: course.id, 
-                        semesterId: 0, 
-                        subjectId: '' 
-                      }))}
+                    onClick={() => handleSelectCourse(course.id)}
                     >
                       <CardContent sx={{ p: 3 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -546,11 +555,7 @@ const CreateOrderPage: React.FC = () => {
                         boxShadow: '0 8px 25px rgba(37, 99, 235, 0.2)'
                       } : {})
                     }}
-                    onClick={() => setFormData(prev => ({ 
-                      ...prev, 
-                      semesterId: semester, 
-                      subjectId: '' 
-                    }))}
+                    onClick={() => handleSelectSemester(semester)}
                   >
                     <CardContent sx={{ p: 3 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -1021,8 +1026,8 @@ const CreateOrderPage: React.FC = () => {
                   multiline
                   rows={3}
                   required
-                  placeholder="Например, ПАО Транснефть, Планирование потребности в материалах и комплектующих, ERP"
-                  helperText="Укажите предприятие, бизнес-процесс и предметную область"
+                placeholder="Например: ПАО Транснефть, тема работы, исходные данные"
+                helperText="Укажите предприятие, тему/вариант и ключевые требования"
                 />
               </Grid>
               <Grid item xs={12}>
@@ -1036,23 +1041,6 @@ const CreateOrderPage: React.FC = () => {
                   rows={2}
                 />
               </Grid>
-              {(() => {
-                const selectedSubjectStep4 = getSubjectById(formData.subjectId);
-                const isErpSubject = selectedSubjectStep4?.name === 'Архитектура прикладных информационных систем (ERP)';
-                return isErpSubject ? (
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Логин:Пароль базы 1С"
-                      value={formData.oneSDatabaseCredentials}
-                      onChange={(e) => setFormData(prev => ({ ...prev, oneSDatabaseCredentials: e.target.value }))}
-                      variant="outlined"
-                      required
-                      helperText="Заполните только для ERP-предмета"
-                    />
-                  </Grid>
-                ) : null;
-              })()}
             </Grid>
           </Box>
         );

@@ -76,15 +76,13 @@ PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://bbifather.ru")
 
 print(f"🔗 PUBLIC_BASE_URL: {PUBLIC_BASE_URL}")
 
-# Специальные настройки для предмета ERP
-ERP_SUBJECT_NAME = "Архитектура прикладных информационных систем (ERP)"
-# Отдельный чат для уведомлений по ERP (по умолчанию 814032949, можно переопределить в .env)
-ERP_CHAT_ID = os.getenv("TELEGRAM_ERP_CHAT_ID", "1175904608")
-
-# Разрешённые статусы заказов (включая новые)
+# Разрешённые статусы заказов (основные)
 ALLOWED_ORDER_STATUSES = {
-    'new', 'waiting_payment', 'paid', 'in_progress', 'completed', 'needs_revision',
-    'queued', 'under_review'
+    'new',
+    'waiting_payment',
+    'paid',
+    'in_progress',
+    'completed',
 }
 
 if not SUPABASE_URL or not SUPABASE_KEY:
@@ -114,22 +112,6 @@ def init_database():
         subjects_count = supabase.table('subjects').select('id', count='exact').execute()
         if subjects_count.count == 0:
             print("⚠️ В таблице subjects нет данных. Создайте предметы в Supabase Dashboard.")
-        
-        # Обеспечиваем наличие предмета ERP
-        try:
-            erp_subject = supabase.table('subjects').select('id').eq('name', ERP_SUBJECT_NAME).limit(1).execute()
-            if not erp_subject.data:
-                print(f"➕ Добавляем предмет: {ERP_SUBJECT_NAME}")
-                supabase.table('subjects').insert({
-                    'name': ERP_SUBJECT_NAME,
-                    'description': 'Практические работы по ERP',
-                    'price': 0.0,
-                    'is_active': True
-                }).execute()
-            else:
-                print(f"✅ Предмет уже существует: {ERP_SUBJECT_NAME} (id={erp_subject.data[0]['id']})")
-        except Exception as e:
-            print(f"⚠️ Не удалось проверить/добавить предмет ERP: {e}")
         
         return True
     except Exception as e:
@@ -178,27 +160,6 @@ def send_notification(message: str):
     except Exception as e:
         print(f"❌ Ошибка отправки в Telegram: {e}")
         print(f"📱 УВЕДОМЛЕНИЕ: {message}")
-
-def send_notification_to_specific_chat(message: str, chat_id: str):
-    """Отправка уведомления в конкретный чат Telegram"""
-    if not BOT_TOKEN or not chat_id:
-        print("⚠️ Telegram бот не настроен или не указан chat_id для специфичного уведомления")
-        print(f"📱 УВЕДОМЛЕНИЕ (ERP): {message}")
-        return
-    try:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        payload = {
-            'chat_id': chat_id,
-            'text': message,
-            'parse_mode': 'HTML'
-        }
-        response = requests.post(url, json=payload, timeout=10)
-        if response.status_code == 200:
-            print(f"✅ Уведомление отправлено в чат {chat_id}")
-        else:
-            print(f"❌ Ошибка Telegram API ({chat_id}): {response.text}")
-    except Exception as e:
-        print(f"❌ Ошибка отправки в конкретный чат: {e}")
 
 async def send_status_notification_to_user(order: dict, new_status: str):
     """Отправка уведомления пользователю об изменении статуса заказа"""
@@ -675,7 +636,12 @@ def create_student(request: Request):
 @app.get("/api/subjects")
 def get_subjects():
     try:
-        response = supabase.table('subjects').select('*').eq('is_active', True).order('name').execute()
+        response = supabase.table('subjects') \
+            .select('*') \
+            .eq('is_active', True) \
+            .neq('name', 'Архитектура прикладных информационных систем (ERP)') \
+            .order('name') \
+            .execute()
         return response.data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка получения предметов: {str(e)}")
@@ -742,7 +708,9 @@ def get_orders(page: int = 1, limit: int = 10, telegram: str = None):
                     'description': order_data['subjects']['description'],
                     'price': order_data['subjects']['price']
                 },
-                'files': json.loads(order_data.get('files', '[]')) if isinstance(order_data.get('files'), str) else order_data.get('files', [])
+                'files': json.loads(order_data.get('files', '[]')) if isinstance(order_data.get('files'), str) else order_data.get('files', []),
+                'executor_telegram': order_data.get('executor_telegram'),
+                'payout_amount': order_data.get('payout_amount')
             }
             del order['students']
             del order['subjects']
@@ -793,6 +761,8 @@ def get_order(order_id: int):
             'description': order['subjects']['description'],
             'price': order['subjects']['price']
         }
+        order['executor_telegram'] = order.get('executor_telegram')
+        order['payout_amount'] = order.get('payout_amount')
         
         # Удаляем вложенные объекты
         del order['students']
@@ -922,7 +892,9 @@ async def create_order(request: Request):
             'selected_works': selected_works_json,
             'is_full_course': is_full_course,
             'actual_price': actual_price,
-            'status': 'new'
+            'status': 'new',
+            'executor_telegram': None,
+            'payout_amount': None
         }
         print(f"📝 Создаем заказ с данными: {order_data}")
         
@@ -964,12 +936,6 @@ async def create_order(request: Request):
             
             send_notification(message)
             
-            # Дополнительное уведомление для заказов по ERP в отдельный чат
-            try:
-                if created_order.get('subject', {}).get('name') == ERP_SUBJECT_NAME and ERP_CHAT_ID:
-                    send_notification_to_specific_chat(message, ERP_CHAT_ID)
-            except Exception as e:
-                print(f"⚠️ Ошибка отправки ERP-уведомления: {e}")
         except Exception as e:
             print(f"⚠️ Ошибка отправки уведомления администратору: {e}")
         
@@ -1054,6 +1020,117 @@ def mark_order_as_paid(order_id: int):
         if "No rows found" in str(e):
             raise HTTPException(status_code=404, detail="Заказ не найден")
         raise HTTPException(status_code=500, detail=f"Ошибка обновления оплаты: {str(e)}")
+
+
+@app.patch("/api/orders/{order_id}/executor")
+async def update_order_executor(order_id: int, request: Request):
+    """Установка или снятие исполнителя и суммы к выплате"""
+    try:
+        data = await request.json()
+        executor = data.get('executor_telegram')
+        payout = data.get('payout_amount')
+
+        update_payload = {
+            'executor_telegram': executor.lstrip('@') if isinstance(executor, str) and executor else None,
+            'updated_at': datetime.now().isoformat()
+        }
+
+        if payout is not None:
+            try:
+                payout_val = float(payout)
+                if payout_val < 0:
+                    raise ValueError
+                update_payload['payout_amount'] = payout_val
+            except Exception:
+                raise HTTPException(status_code=400, detail="Некорректная сумма к выплате")
+
+        response = supabase.table('orders').update(update_payload).eq('id', order_id).execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+
+        return get_order(order_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Ошибка обновления исполнителя: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка обновления исполнителя: {str(e)}")
+
+
+@app.patch("/api/orders/{order_id}/admin")
+async def update_order_admin(order_id: int, request: Request):
+    """Полное редактирование заказа (кроме телеграма студента)"""
+    try:
+        data = await request.json()
+        update_payload = {}
+
+        # Простые поля
+        for field in ['title', 'description', 'input_data', 'variant_info', 'deadline']:
+            if field in data:
+                update_payload[field] = data[field]
+
+        # subject_id смена
+        if 'subject_id' in data:
+            try:
+                update_payload['subject_id'] = int(data.get('subject_id')) if data.get('subject_id') is not None else None
+            except Exception:
+                raise HTTPException(status_code=400, detail="Некорректный subject_id")
+            if update_payload['subject_id'] is not None:
+                subject_exists = supabase.table('subjects').select('id').eq('id', update_payload['subject_id']).limit(1).execute()
+                if not subject_exists.data:
+                    raise HTTPException(status_code=400, detail="Предмет не найден")
+
+        # Цена
+        if 'actual_price' in data:
+            try:
+                price_val = float(data.get('actual_price'))
+                if price_val < 0:
+                    raise ValueError
+                update_payload['actual_price'] = price_val
+            except Exception:
+                raise HTTPException(status_code=400, detail="Некорректная стоимость заказа")
+
+        # Статус
+        if 'status' in data:
+            new_status = data.get('status')
+            if new_status not in ALLOWED_ORDER_STATUSES:
+                raise HTTPException(status_code=400, detail=f"Недопустимый статус: {new_status}")
+            update_payload['status'] = new_status
+
+        # Оплата
+        if 'is_paid' in data:
+            update_payload['is_paid'] = bool(data.get('is_paid'))
+
+        # Исполнитель и выплата
+        if 'executor_telegram' in data:
+            executor = data.get('executor_telegram')
+            update_payload['executor_telegram'] = executor.lstrip('@') if isinstance(executor, str) and executor else None
+
+        if 'payout_amount' in data:
+            try:
+                payout_val = float(data.get('payout_amount')) if data.get('payout_amount') is not None else None
+                if payout_val is not None and payout_val < 0:
+                    raise ValueError
+                update_payload['payout_amount'] = payout_val
+            except Exception:
+                raise HTTPException(status_code=400, detail="Некорректная сумма к выплате")
+
+        if not update_payload:
+            raise HTTPException(status_code=400, detail="Нет данных для обновления")
+
+        update_payload['updated_at'] = datetime.now().isoformat()
+
+        response = supabase.table('orders').update(update_payload).eq('id', order_id).execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+
+        updated_order = get_order(order_id)
+        return updated_order
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Ошибка админ-обновления заказа: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка админ-обновления: {str(e)}")
 
 @app.patch("/api/orders/{order_id}/price")
 async def update_order_price(order_id: int, request: Request):
@@ -1506,12 +1583,6 @@ async def notify_payment(order_id: int):
         message += f"\n\nУведомление: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
         
         send_notification(message)
-        # Дополнительное уведомление для ERP
-        try:
-            if order.get('subject', {}).get('name') == ERP_SUBJECT_NAME and ERP_CHAT_ID:
-                send_notification_to_specific_chat(message, ERP_CHAT_ID)
-        except Exception as e:
-            print(f"⚠️ Ошибка отправки ERP-уведомления (оплата): {e}")
         print(f"💰 Отправлено уведомление об оплате заказа #{order_id}")
         
         # Отправляем уведомление пользователю о получении заявки на оплату
@@ -1624,12 +1695,6 @@ async def request_order_revision(order_id: int, request: Request):
         message += f"\n\nЗапрос отправлен: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
         
         send_notification(message)
-        # Дополнительное уведомление для ERP
-        try:
-            if order.get('subject', {}).get('name') == ERP_SUBJECT_NAME and ERP_CHAT_ID:
-                send_notification_to_specific_chat(message, ERP_CHAT_ID)
-        except Exception as e:
-            print(f"⚠️ Ошибка отправки ERP-уведомления (исправления): {e}")
         print(f"🔄 Отправлено уведомление о запросе исправлений для заказа #{order_id}")
         
         # Отправляем уведомление пользователю о необходимости исправлений
