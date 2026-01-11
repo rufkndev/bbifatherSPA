@@ -160,8 +160,7 @@ const AdminPage: React.FC = () => {
       }
 
       const payload = {
-        title: titleInput,
-        description: descriptionInput,
+        // title и description не изменяем
         input_data: inputDataInput,
         variant_info: variantInfoInput,
         deadline: deadlineInput,
@@ -228,7 +227,7 @@ const AdminPage: React.FC = () => {
   }
 
   return (
-    <Box sx={{ maxWidth: 1400, mx: 'auto', px: 3, py: 4 }}>
+    <Box sx={{ maxWidth: 1400, mx: 'auto', px: 3, py: 4, background: '#ffffff' }}>
       {/* Header */}
       <Box 
         sx={{
@@ -519,7 +518,7 @@ const AdminPage: React.FC = () => {
                     >
                       {order.title}
                     </TableCell>
-                    <TableCell>{order.subject?.name}</TableCell>
+                    <TableCell>{order.subject?.name || '—'}</TableCell>
                     <TableCell>
                       {format(new Date(order.deadline), 'dd.MM.yyyy', { locale: ru })}
                     </TableCell>
@@ -593,13 +592,9 @@ const AdminPage: React.FC = () => {
                 Предмет: <strong>{selectedOrder.subject?.name || 'Не указан'}</strong>
               </Typography>
 
-              <TextField
-                fullWidth
-                label="Название"
-                value={titleInput}
-                onChange={(e) => setTitleInput(e.target.value)}
-                sx={{ mb: 2 }}
-              />
+              <Typography variant="h6" gutterBottom sx={{ wordBreak: 'break-word' }}>
+                {titleInput}
+              </Typography>
               
               <Grid container spacing={2} sx={{ mb: 1 }}>
                 <Grid item xs={12} md={6}>
@@ -633,15 +628,9 @@ const AdminPage: React.FC = () => {
                 </Grid>
               </Grid>
 
-              <TextField
-                fullWidth
-                multiline
-                rows={3}
-                label="Описание работы"
-                value={descriptionInput}
-                onChange={(e) => setDescriptionInput(e.target.value)}
-                sx={{ mb: 2 }}
-              />
+              <Typography variant="body2" color="text.secondary" gutterBottom sx={{ wordBreak: 'break-word', mb: 2 }}>
+                {descriptionInput || 'Описание не указано'}
+              </Typography>
 
               <TextField
                 fullWidth

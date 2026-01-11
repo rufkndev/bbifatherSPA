@@ -145,6 +145,7 @@ export const useTelegramWebApp = () => {
       // Инициализируем WebApp
       try { webApp.ready(); } catch { /* старые клиенты */ }
       try { webApp.expand(); } catch { /* старые клиенты */ }
+      try { webApp.BackButton.hide(); } catch { /* убираем мерцание кнопки назад */ }
       
       // Настраиваем внешний вид (защита от WebAppMethodUnsupported)
       try { webApp.setHeaderColor('#2563eb'); } catch { /* noop */ }

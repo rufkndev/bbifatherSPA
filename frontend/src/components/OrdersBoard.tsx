@@ -161,7 +161,7 @@ const OrdersBoard: React.FC = () => {
   });
 
   return (
-    <Box sx={{ maxWidth: 1400, mx: 'auto', px: { xs: 1, sm: 3 }, py: { xs: 2, sm: 4 } }}>
+    <Box sx={{ maxWidth: 1400, mx: 'auto', px: { xs: 1, sm: 3 }, py: { xs: 2, sm: 4 }, background: '#ffffff' }}>
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
@@ -212,7 +212,7 @@ const OrdersBoard: React.FC = () => {
                   Студент: {order.student?.name} (@{order.student?.telegram})
                 </Typography>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Предмет: {order.subject?.name || 'Кастомный'}
+                  Предмет: {order.subject?.name || '—'}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
                   Дедлайн: {order.deadline ? format(new Date(order.deadline), 'dd.MM.yyyy', { locale: ru }) : '—'}
