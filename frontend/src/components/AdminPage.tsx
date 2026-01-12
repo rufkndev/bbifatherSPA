@@ -121,14 +121,20 @@ const AdminPage: React.FC = () => {
     }
   };
 
+  const getDefaultPayout = (order: Order) => {
+    const base = order.actual_price ?? order.subject?.price ?? 0;
+    return base ? Math.round(base * 0.75 * 100) / 100 : 0;
+  };
+
   const handleOrderClick = (order: Order) => {
     setSelectedOrder(order);
     setNewStatus(order.status);
     setDialogOpen(true);
     const initialPrice = (order.actual_price ?? order.subject?.price ?? 0).toString();
     setPriceInput(initialPrice);
-    const initialPayout = (order.payout_amount ?? '').toString();
-    setPayoutInput(order.payout_amount != null ? initialPayout : '');
+    const fallbackPayout = getDefaultPayout(order);
+    const initialPayout = (order.payout_amount ?? fallbackPayout).toString();
+    setPayoutInput(initialPayout);
     setExecutorInput(order.executor_telegram ? `@${order.executor_telegram}` : '');
     setTitleInput(order.title || '');
     setDescriptionInput(order.description || '');
@@ -153,10 +159,15 @@ const AdminPage: React.FC = () => {
         return;
       }
 
-      const parsedPayout = payoutInput.trim() === '' ? null : parseFloat(payoutInput.replace(',', '.'));
-      if (parsedPayout !== null && (isNaN(parsedPayout) || parsedPayout < 0)) {
-        setError('Введите корректную сумму к выплате');
-        return;
+      let parsedPayout: number | null = null;
+      if (payoutInput.trim() === '') {
+        parsedPayout = getDefaultPayout(selectedOrder);
+      } else {
+        parsedPayout = parseFloat(payoutInput.replace(',', '.'));
+        if (isNaN(parsedPayout) || parsedPayout < 0) {
+          setError('Введите корректную сумму к выплате');
+          return;
+        }
       }
 
       const payload = {
@@ -526,7 +537,7 @@ const AdminPage: React.FC = () => {
                       {order.actual_price ?? order.subject?.price ?? 0} ₽
                     </TableCell>
                     <TableCell sx={{ color: '#059669', fontWeight: 600 }}>
-                      {order.payout_amount != null ? `${order.payout_amount} ₽` : '—'}
+                      {order.payout_amount != null ? `${order.payout_amount} ₽` : `${getDefaultPayout(order)} ₽`}
                     </TableCell>
                     <TableCell sx={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {order.executor_telegram ? `@${order.executor_telegram}` : '—'}

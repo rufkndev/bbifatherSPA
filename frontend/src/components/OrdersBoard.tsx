@@ -31,7 +31,6 @@ const statusLabels: Partial<Record<OrderStatus, string>> = {
 };
 
 const allowedStatuses: OrderStatus[] = [
-  OrderStatus.NEW,
   OrderStatus.WAITING_PAYMENT,
   OrderStatus.PAID,
   OrderStatus.IN_PROGRESS,
@@ -39,7 +38,6 @@ const allowedStatuses: OrderStatus[] = [
 ];
 
 const statusBg: Partial<Record<OrderStatus, string>> = {
-  [OrderStatus.NEW]: 'rgba(148, 163, 184, 0.12)',
   [OrderStatus.WAITING_PAYMENT]: 'rgba(234, 179, 8, 0.12)',
   [OrderStatus.PAID]: 'rgba(14, 165, 233, 0.12)',
   [OrderStatus.IN_PROGRESS]: 'rgba(99, 102, 241, 0.12)',
@@ -47,7 +45,6 @@ const statusBg: Partial<Record<OrderStatus, string>> = {
 };
 
 const statusChip: Partial<Record<OrderStatus, { bg: string; color: string }>> = {
-  [OrderStatus.NEW]: { bg: 'rgba(148,163,184,0.2)', color: '#475569' },
   [OrderStatus.WAITING_PAYMENT]: { bg: 'rgba(234,179,8,0.2)', color: '#a16207' },
   [OrderStatus.PAID]: { bg: 'rgba(14,165,233,0.2)', color: '#0ea5e9' },
   [OrderStatus.IN_PROGRESS]: { bg: 'rgba(99,102,241,0.2)', color: '#6366f1' },
@@ -230,7 +227,7 @@ const OrdersBoard: React.FC = () => {
                   Стоимость: {order.actual_price ?? order.subject?.price ?? 0} ₽
                 </Typography>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  К выплате: {order.payout_amount != null ? `${order.payout_amount} ₽` : '—'}
+                  К выплате: {order.payout_amount != null ? `${order.payout_amount} ₽` : `${getDefaultPayout(order)} ₽`}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
                   Доп. требования: {order.input_data || '—'}
