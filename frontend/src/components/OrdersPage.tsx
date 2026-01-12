@@ -97,23 +97,23 @@ const OrdersPage: React.FC = () => {
   }, [searchParams, setSearchParams, isInTelegram, user]);
 
   const loadOrders = useCallback(async () => {
-    if (currentUser === null) {
-      setOrders([]);
-      setLoading(false);
-      return;
+      if (currentUser === null) {
+          setOrders([]);
+          setLoading(false);
+          return;
     }
 
-    setLoading(true);
-    try {
-      const userToFetch = isAdminView ? null : currentUser;
+      setLoading(true);
+      try {
+        const userToFetch = isAdminView ? null : currentUser;
       const fetchedOrders = await getAllOrders(userToFetch);
       setOrders(fetchedOrders);
-    } catch (error) {
-      console.error('Ошибка загрузки заказов:', error);
-      setOrders([]);
-    } finally {
-      setLoading(false);
-    }
+      } catch (error) {
+        console.error('Ошибка загрузки заказов:', error);
+        setOrders([]);
+      } finally {
+        setLoading(false);
+      }
   }, [currentUser, isAdminView]);
 
   // 2. Эффект для загрузки заказов, когда пользователь изменился

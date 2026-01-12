@@ -40,7 +40,7 @@ function App() {
   return (
     <Box 
       sx={{ 
-        flexGrow: 1,
+        flexGrow: 1, 
         minHeight: '100vh',
         background: 'radial-gradient(circle at 10% 20%, rgba(59,130,246,0.08), transparent 25%), radial-gradient(circle at 80% 0%, rgba(16,185,129,0.08), transparent 22%), linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%)',
         pb: { xs: 8, sm: 2 },

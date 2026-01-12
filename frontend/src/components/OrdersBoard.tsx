@@ -38,6 +38,14 @@ const allowedStatuses: OrderStatus[] = [
   OrderStatus.COMPLETED,
 ];
 
+const statusBg: Partial<Record<OrderStatus, string>> = {
+  [OrderStatus.NEW]: 'rgba(148, 163, 184, 0.12)',
+  [OrderStatus.WAITING_PAYMENT]: 'rgba(234, 179, 8, 0.12)',
+  [OrderStatus.PAID]: 'rgba(14, 165, 233, 0.12)',
+  [OrderStatus.IN_PROGRESS]: 'rgba(99, 102, 241, 0.12)',
+  [OrderStatus.COMPLETED]: 'rgba(16, 185, 129, 0.15)',
+};
+
 const statusChip: Partial<Record<OrderStatus, { bg: string; color: string }>> = {
   [OrderStatus.NEW]: { bg: 'rgba(148,163,184,0.2)', color: '#475569' },
   [OrderStatus.WAITING_PAYMENT]: { bg: 'rgba(234,179,8,0.2)', color: '#a16207' },
@@ -151,7 +159,7 @@ const OrdersBoard: React.FC = () => {
     OrderStatus.WAITING_PAYMENT,
     OrderStatus.PAID,
     OrderStatus.IN_PROGRESS,
-    OrderStatus.NEEDS_REVISION
+    OrderStatus.NEEDS_REVISION,
   ];
 
   const filteredOrders = orders
@@ -192,8 +200,8 @@ const OrdersBoard: React.FC = () => {
 
       <Grid container spacing={2}>
         {filteredOrders.map((order) => (
-              <Grid item xs={12} md={6} lg={4} key={order.id}>
-            <Card sx={{ height: '100%', background: '#fff' }}>
+          <Grid item xs={12} md={6} lg={4} key={order.id}>
+            <Card sx={{ height: '100%', background: statusBg[order.status] || 'background.paper' }}>
               <CardContent>
                 <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
                   <Typography variant="h6" sx={{ fontWeight: 700 }}>
