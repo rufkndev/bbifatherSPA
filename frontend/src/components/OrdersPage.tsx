@@ -622,7 +622,7 @@ const OrdersPage: React.FC = () => {
                              fontSize: { xs: '0.8rem', sm: '0.875rem' }
                            }}
                          >
-                           <strong>Карта Тбанк:</strong> +7 962 120 63 60
+                           <strong>Карта Сбербанк:</strong> +7 962 120 63 60
                          </Typography>
                          <Typography 
                            variant="body2" 
