@@ -60,6 +60,11 @@ const OrdersBoard: React.FC = () => {
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
 
+  const getDefaultPayout = (order: Order) => {
+    const base = order.actual_price ?? order.subject?.price ?? 0;
+    return base ? Math.round(base * 0.75 * 100) / 100 : 0;
+  };
+
   useEffect(() => {
     const saved = localStorage.getItem('board_pass');
     if (saved === 'Admin321') {
