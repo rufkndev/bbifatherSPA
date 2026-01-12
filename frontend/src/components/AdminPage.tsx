@@ -57,19 +57,11 @@ const allowedStatuses: OrderStatus[] = [
 ];
 
 const statusChip: Partial<Record<OrderStatus, { bg: string; color: string }>> = {
-  [OrderStatus.NEW]: { bg: 'rgba(148,163,184,0.2)', color: '#475569' },
-  [OrderStatus.WAITING_PAYMENT]: { bg: 'rgba(234,179,8,0.2)', color: '#a16207' },
-  [OrderStatus.PAID]: { bg: 'rgba(14,165,233,0.2)', color: '#0ea5e9' },
-  [OrderStatus.IN_PROGRESS]: { bg: 'rgba(99,102,241,0.2)', color: '#6366f1' },
-  [OrderStatus.COMPLETED]: { bg: 'rgba(16,185,129,0.2)', color: '#059669' },
-};
-
-const rowBg: Partial<Record<OrderStatus, string>> = {
-  [OrderStatus.NEW]: 'rgba(148,163,184,0.06)',
-  [OrderStatus.WAITING_PAYMENT]: 'rgba(234,179,8,0.06)',
-  [OrderStatus.PAID]: 'rgba(14,165,233,0.06)',
-  [OrderStatus.IN_PROGRESS]: 'rgba(99,102,241,0.06)',
-  [OrderStatus.COMPLETED]: 'rgba(16,185,129,0.08)',
+  [OrderStatus.NEW]: { bg: 'rgba(148,163,184,0.15)', color: '#475569' },
+  [OrderStatus.WAITING_PAYMENT]: { bg: 'rgba(234,179,8,0.15)', color: '#a16207' },
+  [OrderStatus.PAID]: { bg: 'rgba(14,165,233,0.15)', color: '#0ea5e9' },
+  [OrderStatus.IN_PROGRESS]: { bg: 'rgba(99,102,241,0.15)', color: '#6366f1' },
+  [OrderStatus.COMPLETED]: { bg: 'rgba(16,185,129,0.15)', color: '#059669' },
 };
 
 const AdminPage: React.FC = () => {
@@ -419,7 +411,7 @@ const AdminPage: React.FC = () => {
                 <Card
                   sx={{
                     border: '1px solid #e2e8f0',
-                    background: 'rgba(37,99,235,0.04)',
+                    background: '#ffffff',
                   }}
                 >
                   <CardContent sx={{ py: 1.5, px: 2 }}>
@@ -483,10 +475,12 @@ const AdminPage: React.FC = () => {
                     onClick={() => handleOrderClick(order)}
                     sx={{ 
                       cursor: 'pointer',
-                      background: rowBg[order.status] || (index % 2 === 0 ? '#ffffff' : 'rgba(37, 99, 235, 0.02)'),
+                      background: index % 2 === 0 
+                        ? '#ffffff' 
+                        : 'rgba(37, 99, 235, 0.02)',
                       transition: 'all 0.2s ease',
                       '&:hover': {
-                        background: rowBg[order.status] || 'rgba(37, 99, 235, 0.05)',
+                        background: 'rgba(37, 99, 235, 0.05)',
                       },
                       '& .MuiTableCell-root': {
                         borderBottom: '1px solid #e2e8f0',
