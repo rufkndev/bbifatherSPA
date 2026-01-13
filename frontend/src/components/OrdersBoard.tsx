@@ -223,8 +223,13 @@ const OrdersBoard: React.FC = () => {
                   Студент: {order.student?.name} (@{order.student?.telegram})
                 </Typography>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Предмет: {order.subject?.name || '—'}
+                  Группа: {order.student?.group || '—'}
                 </Typography>
+                {order.subject?.name && (
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    {order.subject?.name}
+                  </Typography>
+                )}
                 <Typography variant="body2" color="text.secondary" gutterBottom>
                   Дедлайн: {order.deadline ? format(new Date(order.deadline), 'dd.MM.yyyy', { locale: ru }) : '—'}
                 </Typography>
