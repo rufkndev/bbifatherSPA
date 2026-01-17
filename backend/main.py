@@ -70,6 +70,7 @@ _raw_admin_ids = os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "")
 print(f"🔧 DEBUG: TELEGRAM_ADMIN_CHAT_IDS raw value: '{_raw_admin_ids}'")
 ADMIN_CHAT_IDS = [cid.strip() for cid in _raw_admin_ids.split(",") if cid.strip()]
 print(f"🔧 DEBUG: ADMIN_CHAT_IDS parsed: {ADMIN_CHAT_IDS}")
+EXECUTOR_CHAT_IDS = ["814032949", "862151461"]
 
 # URL для публичного доступа к файлам (для Telegram Bot API)
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://bbifather.ru")
@@ -161,6 +162,30 @@ def send_notification(message: str):
         print(f"❌ Ошибка отправки в Telegram: {e}")
         print(f"📱 УВЕДОМЛЕНИЕ: {message}")
 
+def send_executor_notification(message: str):
+    """Отправка уведомления исполнителям о новом заказе"""
+    if not BOT_TOKEN or not EXECUTOR_CHAT_IDS:
+        print("⚠️ Telegram бот не настроен для уведомлений исполнителей")
+        print(f"📱 УВЕДОМЛЕНИЕ: {message}")
+        return
+
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        for chat_id in list(dict.fromkeys(EXECUTOR_CHAT_IDS)):
+            payload = {
+                'chat_id': chat_id,
+                'text': message,
+                'parse_mode': 'HTML'
+            }
+            response = requests.post(url, json=payload, timeout=10)
+            if response.status_code == 200:
+                print(f"✅ Уведомление исполнителю отправлено: {chat_id}")
+            else:
+                print(f"❌ Ошибка Telegram API для {chat_id}: {response.text}")
+    except Exception as e:
+        print(f"❌ Ошибка отправки исполнителям в Telegram: {e}")
+        print(f"📱 УВЕДОМЛЕНИЕ: {message}")
+
 async def send_status_notification_to_user(order: dict, new_status: str):
     """Отправка уведомления пользователю об изменении статуса заказа"""
     if not BOT_TOKEN:
@@ -191,48 +216,48 @@ async def send_status_notification_to_user(order: dict, new_status: str):
     status_messages = {
         'new': {
             'emoji': '🆕',
-            'title': 'Новый заказ создан',
-            'message': 'Ваш заказ принят в систему. Ожидается оплата.'
+            'title': 'Заказ создан',
+            'message': 'Заказ принят в систему и готов к дальнейшей обработке.'
         },
         'waiting_payment': {
-            'emoji': '💳', 
+            'emoji': '💳',
             'title': 'Ожидается оплата',
-            'message': 'Пожалуйста, произведите оплату согласно указанным реквизитам.'
+            'message': 'Пожалуйста, произведите оплату по указанным реквизитам.'
         },
         'paid': {
             'emoji': '✅',
-            'title': 'Оплата подтверждена', 
-            'message': 'Спасибо за оплату! Ваш заказ принят в работу.'
+            'title': 'Оплата подтверждена',
+            'message': 'Спасибо за оплату! Заказ передан в работу.'
         },
         'in_progress': {
             'emoji': '⚙️',
-            'title': 'Работа началась',
-            'message': 'Мы приступили к выполнению вашего заказа!'
+            'title': 'Заказ в работе',
+            'message': 'Мы приступили к выполнению вашего заказа.'
         },
         'completed': {
             'emoji': '🎉',
-            'title': 'Работа выполнена',
-            'message': 'Ваш заказ готов! Файлы доступны для скачивания.'
+            'title': 'Заказ выполнен',
+            'message': 'Работа готова. Файлы доступны для скачивания.'
         },
         'needs_revision': {
             'emoji': '🔄',
-            'title': 'Требуются исправления',
-            'message': 'Необходимы небольшие правки. Проверьте комментарии.'
+            'title': 'Нужны исправления',
+            'message': 'Запрошены исправления. Ознакомьтесь с комментариями.'
         },
         'queued': {
             'emoji': '🕒',
-            'title': 'В очереди',
-            'message': 'Ваш заказ поставлен в очередь на выполнение.'
+            'title': 'Заказ в очереди',
+            'message': 'Заказ поставлен в очередь на выполнение.'
         },
         'under_review': {
             'emoji': '👀',
-            'title': 'На рассмотрении',
-            'message': 'Ваш заказ находится на рассмотрении у администратора.'
+            'title': 'Заказ на рассмотрении',
+            'message': 'Администратор проверяет информацию по заказу.'
         },
         'cancelled': {
             'emoji': '❌',
             'title': 'Заказ отменен',
-            'message': 'Заказ был отменен. Если есть вопросы - обращайтесь в поддержку.'
+            'message': 'Если есть вопросы, обратитесь в техподдержку.'
         }
     }
     
@@ -241,16 +266,33 @@ async def send_status_notification_to_user(order: dict, new_status: str):
         'title': 'Статус обновлен',
         'message': f'Статус вашего заказа изменен на: {new_status}'
     })
+
+    status_labels = {
+        'new': 'Новый',
+        'waiting_payment': 'Ожидание оплаты',
+        'paid': 'Оплачен',
+        'in_progress': 'В работе',
+        'completed': 'Выполнен',
+        'needs_revision': 'Нужны исправления',
+        'queued': 'В очереди',
+        'under_review': 'На рассмотрении',
+        'cancelled': 'Отменен'
+    }
     
     # Формируем красивое уведомление
+    status_label = status_labels.get(new_status, new_status)
+    price_value = order.get('actual_price')
+    price_line = f"\n💰 <b>Стоимость:</b> {price_value} ₽" if isinstance(price_value, (int, float)) and price_value > 0 else ""
+
     notification_text = f"""
 {status_info['emoji']} <b>{status_info['title']}</b>
 
-📝 <b>Заказ #{order['id']}:</b> {order['title']}
+📝 <b>Заказ №{order['id']}</b>
+📌 <b>Тема:</b> {order['title']}
 📚 <b>Предмет:</b> {order['subject']['name']}
 ⏰ <b>Дедлайн:</b> {order['deadline']}
+🔄 <b>Статус:</b> {status_label}{price_line}
 
-💬 <b>Сообщение:</b>
 {status_info['message']}
     """.strip()
     
@@ -938,12 +980,21 @@ async def create_order(request: Request):
             
         except Exception as e:
             print(f"⚠️ Ошибка отправки уведомления администратору: {e}")
-        
-        # Отправляем уведомление пользователю о создании заказа
+
+        # Уведомляем исполнителей о новом заказе на доске
         try:
-            await send_status_notification_to_user(created_order, 'new')
+            executor_message = f"""
+🆕 <b>Новый заказ на доске</b>
+
+📝 <b>Заказ №{order_id}</b>
+📌 <b>Тема:</b> {created_order['title']}
+📚 <b>Предмет:</b> {created_order['subject']['name']}
+⏰ <b>Дедлайн:</b> {created_order['deadline']}
+💬 <b>Кратко:</b> {created_order['description'][:160]}{'...' if len(created_order['description']) > 160 else ''}
+            """.strip()
+            send_executor_notification(executor_message)
         except Exception as e:
-            print(f"⚠️ Ошибка отправки уведомления пользователю: {e}")
+            print(f"⚠️ Ошибка отправки уведомления исполнителям: {e}")
         
         return created_order
         
@@ -1148,12 +1199,13 @@ async def update_order_admin(order_id: int, request: Request):
 
         updated_order = get_order(order_id)
 
-        # Уведомление о переходе в ожидание оплаты
+        # Уведомление о смене статуса
         try:
-            if old_status != updated_order.get('status') and updated_order.get('status') == 'waiting_payment':
-                await send_status_notification_to_user(updated_order, 'waiting_payment')
+            new_status = updated_order.get('status')
+            if old_status != new_status and new_status:
+                await send_status_notification_to_user(updated_order, new_status)
         except Exception as e:
-            print(f"⚠️ Ошибка отправки уведомления (waiting_payment): {e}")
+            print(f"⚠️ Ошибка отправки уведомления о смене статуса: {e}")
 
         return updated_order
 
