@@ -298,7 +298,7 @@ async def send_status_notification_to_user(order: dict, new_status: str):
     
     # Добавляем дополнительную информацию для некоторых статусов
     if new_status == 'completed':
-        notification_text += "\n\n📱 Откройте приложение или воспользуйтесь кнопкой '📥 Скачать файлы' в меню бота для получения готовых файлов."
+        notification_text += "\n\n📱 Откройте приложение для получения готовых файлов."
     elif new_status == 'needs_revision':
         if order.get('revision_comment'):
             notification_text += f"\n\n📋 <b>Комментарий:</b>\n{order['revision_comment']}"
@@ -340,6 +340,26 @@ async def send_status_notification_to_user(order: dict, new_status: str):
             
     except Exception as e:
         print(f"❌ Ошибка отправки уведомления пользователю @{user_telegram}: {e}")
+
+def notify_executors_waiting_payment(order: dict):
+    """Уведомление исполнителей при появлении заказа на доске"""
+    try:
+        if not order or order.get('status') != 'waiting_payment':
+            return
+
+        executor_message = f"""
+🆕 <b>Новый заказ на доске</b>
+
+📝 <b>Заказ №{order['id']}</b>
+📌 <b>Тема:</b> {order['title']}
+📚 <b>Предмет:</b> {order['subject']['name']}
+⏰ <b>Дедлайн:</b> {order['deadline']}
+💬 <b>Кратко:</b> {order['description'][:160]}{'...' if len(order['description']) > 160 else ''}
+        """.strip()
+
+        send_executor_notification(executor_message)
+    except Exception as e:
+        print(f"⚠️ Ошибка отправки уведомления исполнителям: {e}")
 
 # Старый startup удален - теперь используем lifespan
 
@@ -981,21 +1001,6 @@ async def create_order(request: Request):
         except Exception as e:
             print(f"⚠️ Ошибка отправки уведомления администратору: {e}")
 
-        # Уведомляем исполнителей о новом заказе на доске
-        try:
-            executor_message = f"""
-🆕 <b>Новый заказ на доске</b>
-
-📝 <b>Заказ №{order_id}</b>
-📌 <b>Тема:</b> {created_order['title']}
-📚 <b>Предмет:</b> {created_order['subject']['name']}
-⏰ <b>Дедлайн:</b> {created_order['deadline']}
-💬 <b>Кратко:</b> {created_order['description'][:160]}{'...' if len(created_order['description']) > 160 else ''}
-            """.strip()
-            send_executor_notification(executor_message)
-        except Exception as e:
-            print(f"⚠️ Ошибка отправки уведомления исполнителям: {e}")
-        
         return created_order
         
     except Exception as e:
@@ -1045,6 +1050,8 @@ async def update_order_status(order_id: int, request: Request):
         # Отправляем уведомление пользователю о изменении статуса
         if old_order['status'] != status and updated_order['student'].get('telegram'):
             await send_status_notification_to_user(updated_order, status)
+            if status == 'waiting_payment':
+                notify_executors_waiting_payment(updated_order)
         
         return updated_order
         
@@ -1204,6 +1211,8 @@ async def update_order_admin(order_id: int, request: Request):
             new_status = updated_order.get('status')
             if old_status != new_status and new_status:
                 await send_status_notification_to_user(updated_order, new_status)
+                if new_status == 'waiting_payment':
+                    notify_executors_waiting_payment(updated_order)
         except Exception as e:
             print(f"⚠️ Ошибка отправки уведомления о смене статуса: {e}")
 
@@ -1257,6 +1266,8 @@ async def update_order_price(order_id: int, request: Request):
         # Отправляем уведомление пользователю, если статус изменился на ожидание оплаты
         if current_order.get('status') != new_status and updated_order['student'].get('telegram'):
             await send_status_notification_to_user(updated_order, new_status)
+            if new_status == 'waiting_payment':
+                notify_executors_waiting_payment(updated_order)
 
         return updated_order
 
