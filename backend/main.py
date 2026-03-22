@@ -471,7 +471,13 @@ def force_refresh_all_user_keyboards(silent: bool = True) -> dict:
 
     targets = []
     for student in students:
-        chat_id = str(student.get('chat_id', '')).strip()
+        raw_chat_id = student.get('chat_id')
+        chat_id = str(raw_chat_id).strip()
+        # Пропускаем пустые/битые значения chat_id из БД.
+        if not chat_id or chat_id.lower() in {"none", "null", "nan"}:
+            continue
+        if not chat_id.lstrip("-").isdigit():
+            continue
         if chat_id:
             targets.append({
                 "student_id": student.get("id"),
