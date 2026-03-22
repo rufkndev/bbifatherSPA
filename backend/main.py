@@ -40,13 +40,6 @@ async def lifespan(app: FastAPI):
     else:
         print("⚠️ Telegram уведомления не настроены")
 
-    if FORCE_REFRESH_ON_STARTUP:
-        try:
-            refresh_result = force_refresh_all_user_keyboards()
-            print(f"🔄 Принудительное обновление клавиатуры: {refresh_result}")
-        except Exception as e:
-            print(f"⚠️ Не удалось обновить клавиатуры на старте: {e}")
-    
     yield
     # Shutdown
     print("👋 Backend остановлен")
@@ -84,7 +77,6 @@ EXECUTOR_CHAT_IDS = ["814032949", "862151461", "5648974088"]
 # URL для публичного доступа к файлам (для Telegram Bot API)
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://bbifather.ru")
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://bbifather.ru")
-FORCE_REFRESH_ON_STARTUP = os.getenv("FORCE_REFRESH_ON_STARTUP", "true").lower() == "true"
 
 print(f"🔗 PUBLIC_BASE_URL: {PUBLIC_BASE_URL}")
 
@@ -482,12 +474,15 @@ def force_refresh_all_user_keyboards() -> dict:
         chat_id = str(student.get('chat_id', '')).strip()
         if chat_id:
             targets.append({
+                "student_id": student.get("id"),
                 "chat_id": chat_id,
                 "telegram": (student.get('telegram') or '').strip()
             })
 
     sent = 0
     failed = 0
+    blocked = 0
+    blocked_student_ids: List[int] = []
     unique_targets = {}
     for target in targets:
         unique_targets[target["chat_id"]] = target
@@ -507,17 +502,34 @@ def force_refresh_all_user_keyboards() -> dict:
         if response is not None and response.status_code == 200:
             sent += 1
         else:
-            failed += 1
-            if response is not None:
-                print(f"⚠️ Не удалось обновить клавиатуру для {target['chat_id']}: {response.text}")
+            if response is not None and response.status_code == 403 and "blocked by the user" in response.text.lower():
+                blocked += 1
+                student_id = target.get("student_id")
+                if isinstance(student_id, int):
+                    blocked_student_ids.append(student_id)
+            else:
+                failed += 1
+                if response is not None:
+                    print(f"⚠️ Не удалось обновить клавиатуру для {target['chat_id']}: {response.text}")
         # Мягкое троттлирование, чтобы снизить риск 429 при массовой рассылке
         time.sleep(0.06)
+
+    # Очищаем chat_id у пользователей, которые заблокировали бота,
+    # чтобы не пытаться отправлять им массовые обновления в будущем.
+    if blocked_student_ids:
+        try:
+            for student_id in list(dict.fromkeys(blocked_student_ids)):
+                supabase.table('students').update({'chat_id': None}).eq('id', student_id).execute()
+            print(f"🧹 Очищены chat_id у {len(set(blocked_student_ids))} пользователей, заблокировавших бота")
+        except Exception as e:
+            print(f"⚠️ Не удалось очистить chat_id заблокированных пользователей: {e}")
 
     return {
         "status": "completed",
         "total_targets": len(unique_targets),
         "sent": sent,
-        "failed": failed
+        "failed": failed,
+        "blocked": blocked
     }
 
 # Старый startup удален - теперь используем lifespan
