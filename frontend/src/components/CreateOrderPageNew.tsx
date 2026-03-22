@@ -84,11 +84,10 @@ const CreateOrderPage: React.FC = () => {
   useEffect(() => {
     loadSubjects();
     
-    // Автоматическое заполнение данных из Telegram
+    // Автоматическое заполнение только telegram (ФИО заполняется вручную)
     if (isInTelegram && user) {
       setFormData(prev => ({
         ...prev,
-        studentName: user.firstName + (user.lastName ? ` ${user.lastName}` : ''),
         studentTelegram: user.username ? `@${user.username}` : '',
       }));
     }
@@ -894,10 +893,11 @@ const CreateOrderPage: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="Ваше имя"
+                  label="Ваше ФИО"
                   value={formData.studentName}
                   onChange={(e) => setFormData(prev => ({ ...prev, studentName: e.target.value }))}
                   variant="outlined"
+                  helperText="Заполните ФИО вручную"
                   required
                 />
               </Grid>

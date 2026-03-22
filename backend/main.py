@@ -1,8 +1,10 @@
 import json
+import html
 import os
 import shutil
 import zipfile
 import tempfile
+import time
 from datetime import datetime, timedelta
 import urllib.parse
 from typing import List, Dict, Any, Optional
@@ -37,6 +39,13 @@ async def lifespan(app: FastAPI):
         print(f"🔧 Raw TELEGRAM_ADMIN_CHAT_IDS: {os.getenv('TELEGRAM_ADMIN_CHAT_IDS', 'НЕ ЗАДАНО')}")
     else:
         print("⚠️ Telegram уведомления не настроены")
+
+    if FORCE_REFRESH_ON_STARTUP:
+        try:
+            refresh_result = force_refresh_all_user_keyboards()
+            print(f"🔄 Принудительное обновление клавиатуры: {refresh_result}")
+        except Exception as e:
+            print(f"⚠️ Не удалось обновить клавиатуры на старте: {e}")
     
     yield
     # Shutdown
@@ -70,12 +79,75 @@ _raw_admin_ids = os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "")
 print(f"🔧 DEBUG: TELEGRAM_ADMIN_CHAT_IDS raw value: '{_raw_admin_ids}'")
 ADMIN_CHAT_IDS = [cid.strip() for cid in _raw_admin_ids.split(",") if cid.strip()]
 print(f"🔧 DEBUG: ADMIN_CHAT_IDS parsed: {ADMIN_CHAT_IDS}")
-EXECUTOR_CHAT_IDS = ["814032949", "862151461"]
+EXECUTOR_CHAT_IDS = ["814032949", "862151461", "5648974088"]
 
 # URL для публичного доступа к файлам (для Telegram Bot API)
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://bbifather.ru")
+WEB_APP_URL = os.getenv("WEB_APP_URL", "https://bbifather.ru")
+FORCE_REFRESH_ON_STARTUP = os.getenv("FORCE_REFRESH_ON_STARTUP", "true").lower() == "true"
 
 print(f"🔗 PUBLIC_BASE_URL: {PUBLIC_BASE_URL}")
+
+def build_web_app_url(telegram_username: Optional[str] = None) -> str:
+    """Генерирует URL мини-аппа с параметрами пользователя."""
+    base_url = WEB_APP_URL.rstrip("/")
+    params = {"source": "telegram_notification"}
+    if telegram_username:
+        params["telegram"] = telegram_username.lstrip("@")
+    return f"{base_url}?{urllib.parse.urlencode(params)}"
+
+def build_main_reply_keyboard(telegram_username: Optional[str] = None) -> dict:
+    """Единая клавиатура бота: только актуальные кнопки."""
+    return {
+        "keyboard": [
+            [
+                {"text": "📱 Открыть мини-апп", "web_app": {"url": build_web_app_url(telegram_username)}},
+            ],
+            [
+                {"text": "💬 Техподдержка"},
+                {"text": "📋 Правила"}
+            ],
+            [
+                {"text": "❓ Как пользоваться сервисом?"}
+            ]
+        ],
+        "resize_keyboard": True,
+        "one_time_keyboard": False,
+        "input_field_placeholder": "Выберите действие из меню ниже"
+    }
+
+def post_telegram(method: str, payload: dict, retries: int = 3, timeout: int = 10) -> Optional[requests.Response]:
+    """Отправляет запрос в Telegram API с retry для временных ошибок."""
+    if not BOT_TOKEN:
+        return None
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
+    last_response = None
+
+    for attempt in range(retries):
+        try:
+            response = requests.post(url, json=payload, timeout=timeout)
+            last_response = response
+
+            # Успех
+            if response.status_code == 200:
+                return response
+
+            # Временные ошибки Telegram/сети
+            if response.status_code in (429, 500, 502, 503, 504) and attempt < retries - 1:
+                wait_seconds = 1.5 * (attempt + 1)
+                time.sleep(wait_seconds)
+                continue
+
+            return response
+        except requests.RequestException as e:
+            print(f"⚠️ Ошибка запроса к Telegram API (попытка {attempt + 1}/{retries}): {e}")
+            if attempt < retries - 1:
+                time.sleep(1.5 * (attempt + 1))
+            else:
+                return last_response
+
+    return last_response
 
 # Разрешённые статусы заказов (основные)
 ALLOWED_ORDER_STATUSES = {
@@ -83,6 +155,7 @@ ALLOWED_ORDER_STATUSES = {
     'waiting_payment',
     'paid',
     'in_progress',
+    'needs_revision',
     'completed',
 }
 
@@ -127,7 +200,6 @@ def send_notification(message: str):
         return
 
     try:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         targets: List[str] = []
         
         print(f"🔍 BOT_CHAT_ID: {BOT_CHAT_ID} (тип: {type(BOT_CHAT_ID).__name__})")
@@ -149,7 +221,10 @@ def send_notification(message: str):
                 'text': message,
                 'parse_mode': 'HTML'
             }
-            response = requests.post(url, json=payload, timeout=10)
+            response = post_telegram("sendMessage", payload)
+            if response is None:
+                print("❌ BOT_TOKEN не настроен, отправка невозможна")
+                continue
             if response.status_code == 200:
                 success_any = True
                 print(f"✅ Уведомление отправлено администратору {chat_id}")
@@ -170,14 +245,16 @@ def send_executor_notification(message: str):
         return
 
     try:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         for chat_id in list(dict.fromkeys(EXECUTOR_CHAT_IDS)):
             payload = {
                 'chat_id': chat_id,
                 'text': message,
                 'parse_mode': 'HTML'
             }
-            response = requests.post(url, json=payload, timeout=10)
+            response = post_telegram("sendMessage", payload)
+            if response is None:
+                print("❌ BOT_TOKEN не настроен, отправка невозможна")
+                continue
             if response.status_code == 200:
                 print(f"✅ Уведомление исполнителю отправлено: {chat_id}")
             else:
@@ -197,20 +274,22 @@ async def send_status_notification_to_user(order: dict, new_status: str):
         print("⚠️ У пользователя не указан telegram")
         return
     
-    # Получаем chat_id пользователя из БД
+    # Получаем chat_id пользователя из БД (или fallback на @username)
+    notification_target = None
     try:
         student_response = supabase.table('students').select('chat_id').eq('telegram', user_telegram).limit(1).execute()
-        
-        if not student_response.data or not student_response.data[0].get('chat_id'):
-            print(f"⚠️ Chat ID не найден для пользователя @{user_telegram}. Пользователь должен написать боту /start")
-            return
-        
-        user_chat_id = student_response.data[0]['chat_id']
-        print(f"📱 Отправляем уведомление пользователю @{user_telegram} (chat_id: {user_chat_id})")
-        
+
+        if student_response.data and student_response.data[0].get('chat_id'):
+            notification_target = student_response.data[0]['chat_id']
+            print(f"📱 Отправляем уведомление пользователю @{user_telegram} (chat_id: {notification_target})")
+        else:
+            # Пытаемся отправить по username, чтобы не терять уведомление
+            notification_target = f"@{user_telegram}"
+            print(f"⚠️ Chat ID не найден для @{user_telegram}, fallback на username")
+
     except Exception as e:
         print(f"❌ Ошибка получения chat_id: {e}")
-        return
+        notification_target = f"@{user_telegram}"
     
     # Сообщения для разных статусов
     status_messages = {
@@ -284,13 +363,17 @@ async def send_status_notification_to_user(order: dict, new_status: str):
     price_value = order.get('actual_price')
     price_line = f"\n💰 <b>Стоимость:</b> {price_value} ₽" if isinstance(price_value, (int, float)) and price_value > 0 else ""
 
+    safe_title = html.escape(str(order.get('title', 'Без названия')))
+    safe_subject = html.escape(str(order.get('subject', {}).get('name', 'Не указан')))
+    safe_deadline = html.escape(str(order.get('deadline', 'Не указан')))
+
     notification_text = f"""
 {status_info['emoji']} <b>{status_info['title']}</b>
 
 📝 <b>Заказ №{order['id']}</b>
-📌 <b>Тема:</b> {order['title']}
-📚 <b>Предмет:</b> {order['subject']['name']}
-⏰ <b>Дедлайн:</b> {order['deadline']}
+📌 <b>Тема:</b> {safe_title}
+📚 <b>Предмет:</b> {safe_subject}
+⏰ <b>Дедлайн:</b> {safe_deadline}
 🔄 <b>Статус:</b> {status_label}{price_line}
 
 {status_info['message']}
@@ -301,38 +384,25 @@ async def send_status_notification_to_user(order: dict, new_status: str):
         notification_text += "\n\n📱 Откройте приложение для получения готовых файлов."
     elif new_status == 'needs_revision':
         if order.get('revision_comment'):
-            notification_text += f"\n\n📋 <b>Комментарий:</b>\n{order['revision_comment']}"
+            notification_text += f"\n\n📋 <b>Комментарий:</b>\n{html.escape(str(order['revision_comment']))}"
     
     notification_text += "\n\n💬 Используйте меню бота для управления заказами"
     
-    # Создаем reply keyboard для уведомления
-    keyboard = {
-        "keyboard": [
-            [
-                {"text": "📱 Открыть приложение", "web_app": {"url": f"https://bbifather.ru?telegram={user_telegram}"}},
-            ],
-            [
-                {"text": "💬 Техподдержка"},
-                {"text": "📥 Скачать файлы"}
-            ]
-        ],
-        "resize_keyboard": True,
-        "one_time_keyboard": False,
-        "input_field_placeholder": "Выберите действие из меню ниже"
-    }
+    keyboard = build_main_reply_keyboard(user_telegram)
     
     try:
-        telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        
         payload = {
-            'chat_id': user_chat_id,  # Используем chat_id вместо username
+            'chat_id': notification_target,
             'text': notification_text,
             'parse_mode': 'HTML',
             'reply_markup': keyboard
         }
-        
-        response = requests.post(telegram_url, json=payload, timeout=10)
-        
+
+        response = post_telegram("sendMessage", payload)
+        if response is None:
+            print("❌ Не удалось отправить уведомление: Telegram не настроен")
+            return
+
         if response.status_code == 200:
             print(f"✅ Уведомление о статусе '{new_status}' отправлено пользователю @{user_telegram}")
         else:
@@ -341,25 +411,114 @@ async def send_status_notification_to_user(order: dict, new_status: str):
     except Exception as e:
         print(f"❌ Ошибка отправки уведомления пользователю @{user_telegram}: {e}")
 
-def notify_executors_waiting_payment(order: dict):
-    """Уведомление исполнителей при появлении заказа на доске"""
+def notify_executors_board_entry(order: dict):
+    """Уведомление исполнителей, когда заказ попадает/возвращается на доску."""
     try:
-        if not order or order.get('status') != 'waiting_payment':
+        if not order:
             return
 
-        executor_message = f"""
-🆕 <b>Новый заказ на доске</b>
+        status = order.get('status')
+        if status not in ('paid', 'needs_revision'):
+            return
+
+        subject_name = html.escape(str(order.get('subject', {}).get('name', 'Не указан')))
+        title = html.escape(str(order.get('title', 'Без названия')))
+        deadline = html.escape(str(order.get('deadline', 'Не указан')))
+        short_description = str(order.get('description', '') or '')
+        safe_short_description = html.escape(short_description[:160])
+        if len(short_description) > 160:
+            safe_short_description += "..."
+
+        if status == 'needs_revision':
+            revision_comment = str(order.get('revision_comment', '') or '').strip()
+            revision_grade = str(order.get('revision_grade', '') or '').strip()
+            revision_comment_safe = html.escape(revision_comment[:500]) if revision_comment else "Не указан"
+            if revision_comment and len(revision_comment) > 500:
+                revision_comment_safe += "..."
+            revision_grade_safe = html.escape(revision_grade) if revision_grade else "Не указана"
+
+            executor_message = f"""
+🔄 <b>Заказ вернулся на доску (нужны исправления)</b>
 
 📝 <b>Заказ №{order['id']}</b>
-📌 <b>Тема:</b> {order['title']}
-📚 <b>Предмет:</b> {order['subject']['name']}
-⏰ <b>Дедлайн:</b> {order['deadline']}
-💬 <b>Кратко:</b> {order['description'][:160]}{'...' if len(order['description']) > 160 else ''}
+📌 <b>Тема:</b> {title}
+📚 <b>Предмет:</b> {subject_name}
+⏰ <b>Дедлайн:</b> {deadline}
+💬 <b>Кратко:</b> {safe_short_description}
+📋 <b>Комментарий на исправление:</b>
+{revision_comment_safe}
+⭐ <b>Оценка из Moodle:</b> {revision_grade_safe}
+            """.strip()
+        else:
+            executor_message = f"""
+✅ <b>Оплаченный заказ появился на доске</b>
+
+📝 <b>Заказ №{order['id']}</b>
+📌 <b>Тема:</b> {title}
+📚 <b>Предмет:</b> {subject_name}
+⏰ <b>Дедлайн:</b> {deadline}
+💬 <b>Кратко:</b> {safe_short_description}
         """.strip()
 
         send_executor_notification(executor_message)
     except Exception as e:
         print(f"⚠️ Ошибка отправки уведомления исполнителям: {e}")
+
+def force_refresh_all_user_keyboards() -> dict:
+    """Принудительно отправляет всем пользователям актуальную клавиатуру."""
+    if not BOT_TOKEN:
+        return {"status": "skipped", "reason": "BOT_TOKEN не настроен"}
+    if not supabase:
+        return {"status": "skipped", "reason": "Supabase не настроен"}
+
+    try:
+        students_response = supabase.table('students').select('id, telegram, chat_id').execute()
+        students = students_response.data or []
+    except Exception as e:
+        return {"status": "error", "reason": f"Ошибка чтения студентов: {e}"}
+
+    targets = []
+    for student in students:
+        chat_id = str(student.get('chat_id', '')).strip()
+        if chat_id:
+            targets.append({
+                "chat_id": chat_id,
+                "telegram": (student.get('telegram') or '').strip()
+            })
+
+    sent = 0
+    failed = 0
+    unique_targets = {}
+    for target in targets:
+        unique_targets[target["chat_id"]] = target
+
+    for target in unique_targets.values():
+        telegram_username = target["telegram"] or None
+        payload = {
+            "chat_id": target["chat_id"],
+            "text": (
+                "♻️ Бот обновлён.\n\n"
+                "Ниже отображается актуальное меню с кнопкой открытия мини-аппа."
+            ),
+            "parse_mode": "HTML",
+            "reply_markup": build_main_reply_keyboard(telegram_username)
+        }
+        response = post_telegram("sendMessage", payload)
+        if response is not None and response.status_code == 200:
+            sent += 1
+        else:
+            failed += 1
+            if response is not None:
+                print(f"⚠️ Не удалось обновить клавиатуру для {target['chat_id']}: {response.text}")
+        # Мягкое троттлирование, чтобы снизить риск 429 при массовой рассылке
+        time.sleep(0.06)
+
+    return {
+        "status": "completed",
+        "total_targets": len(unique_targets),
+        "sent": sent,
+        "failed": failed
+    }
 
 # Старый startup удален - теперь используем lifespan
 
@@ -367,6 +526,12 @@ def notify_executors_waiting_payment(order: dict):
 @app.get("/")
 def read_root():
     return {"message": "Student Orders API is running"}
+
+@app.post("/api/bot/force-refresh-keyboards")
+async def force_refresh_keyboards():
+    """Принудительное обновление клавиатуры для всех пользователей."""
+    result = force_refresh_all_user_keyboards()
+    return result
 
 async def save_chat_id_handler(request: Request):
     """Общий обработчик для сохранения chat_id пользователя"""
@@ -856,8 +1021,18 @@ async def create_order(request: Request):
         
         # Создаем или получаем студента
         student_data = data['student']
+        if not isinstance(student_data, dict):
+            raise HTTPException(status_code=400, detail="Некорректный формат данных студента")
+        if not student_data.get('name') or not student_data.get('group') or not student_data.get('telegram'):
+            raise HTTPException(status_code=400, detail="Заполните ФИО, группу и Telegram")
+
         # Убираем @ из ника
-        clean_telegram = student_data['telegram'].lstrip('@')
+        raw_telegram = str(student_data.get('telegram', '')).strip()
+        if raw_telegram.startswith('https://t.me/'):
+            raw_telegram = raw_telegram.split('https://t.me/', 1)[1]
+        clean_telegram = raw_telegram.lstrip('@').strip()
+        if not clean_telegram:
+            raise HTTPException(status_code=400, detail="Некорректный Telegram. Укажите username в формате @username")
         print(f"👤 Обработка студента: @{clean_telegram}")
         
         # Проверяем существует ли студент
@@ -997,19 +1172,20 @@ async def create_order(request: Request):
                 message += f"\n\n📋 Дополнительные требования:\n{created_order['input_data'][:300]}{'...' if len(created_order['input_data']) > 300 else ''}"
             
             send_notification(message)
+
+            # Уведомляем самого пользователя о создании заказа (если доступна доставка)
+            await send_status_notification_to_user(created_order, 'new')
             
         except Exception as e:
             print(f"⚠️ Ошибка отправки уведомления администратору: {e}")
 
         return created_order
         
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ Ошибка создания заказа: {e}")
-        if "No rows found" in str(e):
-            # Студент не найден, но это нормально
-            pass
-        else:
-            raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка при создании заказа")
 
 @app.patch("/api/orders/{order_id}/status")
 async def update_order_status(order_id: int, request: Request):
@@ -1050,8 +1226,8 @@ async def update_order_status(order_id: int, request: Request):
         # Отправляем уведомление пользователю о изменении статуса
         if old_order['status'] != status and updated_order['student'].get('telegram'):
             await send_status_notification_to_user(updated_order, status)
-            if status == 'waiting_payment':
-                notify_executors_waiting_payment(updated_order)
+            if status in ('paid', 'needs_revision'):
+                notify_executors_board_entry(updated_order)
         
         return updated_order
         
@@ -1061,18 +1237,34 @@ async def update_order_status(order_id: int, request: Request):
         raise HTTPException(status_code=500, detail=f"Ошибка обновления статуса: {str(e)}")
 
 @app.patch("/api/orders/{order_id}/paid")
-def mark_order_as_paid(order_id: int):
+async def mark_order_as_paid(order_id: int):
     try:
+        old_order = get_order(order_id)
+
+        next_status = old_order.get('status')
+        if next_status not in ('completed', 'needs_revision'):
+            next_status = 'paid'
+
         # Обновляем статус оплаты
         response = supabase.table('orders').update({
             'is_paid': True,
+            'status': next_status,
             'updated_at': datetime.now().isoformat()
         }).eq('id', order_id).execute()
         
         if not response.data:
             raise HTTPException(status_code=404, detail="Заказ не найден")
         
-        return get_order(order_id)
+        updated_order = get_order(order_id)
+        status_changed = old_order.get('status') != updated_order.get('status')
+
+        if status_changed and updated_order['student'].get('telegram'):
+            await send_status_notification_to_user(updated_order, updated_order['status'])
+
+        if status_changed and updated_order.get('status') in ('paid', 'needs_revision'):
+            notify_executors_board_entry(updated_order)
+
+        return updated_order
         
     except Exception as e:
         if "No rows found" in str(e):
@@ -1211,8 +1403,8 @@ async def update_order_admin(order_id: int, request: Request):
             new_status = updated_order.get('status')
             if old_status != new_status and new_status:
                 await send_status_notification_to_user(updated_order, new_status)
-                if new_status == 'waiting_payment':
-                    notify_executors_waiting_payment(updated_order)
+                if new_status in ('paid', 'needs_revision'):
+                    notify_executors_board_entry(updated_order)
         except Exception as e:
             print(f"⚠️ Ошибка отправки уведомления о смене статуса: {e}")
 
@@ -1263,11 +1455,11 @@ async def update_order_price(order_id: int, request: Request):
         # Получаем обновленный заказ
         updated_order = get_order(order_id)
 
-        # Отправляем уведомление пользователю, если статус изменился на ожидание оплаты
+        # Отправляем уведомление пользователю, если статус изменился
         if current_order.get('status') != new_status and updated_order['student'].get('telegram'):
             await send_status_notification_to_user(updated_order, new_status)
-            if new_status == 'waiting_payment':
-                notify_executors_waiting_payment(updated_order)
+            if new_status in ('paid', 'needs_revision'):
+                notify_executors_board_entry(updated_order)
 
         return updated_order
 
@@ -1701,39 +1893,35 @@ async def notify_payment(order_id: int):
 
 Обычно проверка занимает от 15 минут до нескольких часов.
                 """.strip()
-                
-                # Создаем reply keyboard
-                keyboard = {
-                    "keyboard": [
-                        [
-                            {"text": "📱 Открыть приложение", "web_app": {"url": f"https://bbifather.ru?telegram={user_telegram}"}},
-                        ],
-                        [
-                            {"text": "💬 Техподдержка"},
-                            {"text": "📋 Правила"}
-                        ]
-                    ],
-                    "resize_keyboard": True,
-                    "one_time_keyboard": False,
-                    "input_field_placeholder": "Выберите действие из меню ниже"
-                }
-                
-                telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+
                 payload = {
-                    'chat_id': user_chat_id,  # Используем chat_id
+                    'chat_id': user_chat_id,
                     'text': notification_text,
                     'parse_mode': 'HTML',
-                    'reply_markup': keyboard
+                    'reply_markup': build_main_reply_keyboard(user_telegram)
                 }
-                
-                response = requests.post(telegram_url, json=payload, timeout=10)
+
+                response = post_telegram("sendMessage", payload)
+                if response is None:
+                    print("⚠️ Telegram не настроен, не удалось отправить уведомление пользователю")
+                    return {"status": "notification_sent", "order_id": order_id}
                 
                 if response.status_code == 200:
                     print(f"✅ Уведомление о заявке на оплату отправлено пользователю @{user_telegram}")
                 else:
                     print(f"⚠️ Не удалось отправить уведомление @{user_telegram}: {response.text}")
             else:
-                print(f"⚠️ Chat ID не найден для пользователя @{user_telegram}")
+                print(f"⚠️ Chat ID не найден для пользователя @{user_telegram}, пробуем fallback по username")
+                payload = {
+                    'chat_id': f"@{user_telegram}",
+                    'text': (
+                        "💳 <b>Заявка на оплату получена</b>\n\n"
+                        "Ваша заявка принята и проверяется администратором."
+                    ),
+                    'parse_mode': 'HTML',
+                    'reply_markup': build_main_reply_keyboard(user_telegram)
+                }
+                post_telegram("sendMessage", payload)
                 
         except Exception as e:
             print(f"❌ Ошибка отправки уведомления пользователю: {e}")
@@ -1794,6 +1982,7 @@ async def request_order_revision(order_id: int, request: Request):
         # Отправляем уведомление пользователю о необходимости исправлений
         updated_order = get_order(order_id)
         await send_status_notification_to_user(updated_order, 'needs_revision')
+        notify_executors_board_entry(updated_order)
         
         # Возвращаем обновленный заказ
         return updated_order

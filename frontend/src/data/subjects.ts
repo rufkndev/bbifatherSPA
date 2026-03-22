@@ -12,7 +12,7 @@ export interface SubjectData {
   description: string;
   basePrice?: number; // теперь может быть undefined
   course: number; // курс (1, 2, 3)
-  semester: number; // семестр (1-5)
+  semester: number; // семестр (1-6)
   works: WorkItem[];
   fullCourseDiscount?: number; // скидка при заказе всего курса в %
   isCustomForm?: boolean; // флаг для кастомной формы ввода работ
@@ -34,236 +34,102 @@ export interface SemesterData {
 
 // Структура курсов и семестров
 export const coursesData: CourseData[] = [
-  { id: 1, name: "1 курс", semesters: [1, 2] },
-  { id: 2, name: "2 курс", semesters: [3, 4] },
-  { id: 3, name: "3 курс", semesters: [5] }
+  { id: 2, name: "2 курс", semesters: [4] },
+  { id: 3, name: "3 курс", semesters: [5, 6] }
 ];
 
 // Данные по предметам, структурированные по курсам и семестрам
 export const subjectsData: SubjectData[] = [
-  // 2 курс, 4 семестр - существующие предметы
+  // 2 курс, 4 семестр
   {
-    id: "practice",
-    name: "Летняя практика",
-    description: "Системный анализ предприятия, архитектурное моделирование, управление проектами",
-    basePrice: 2500,
+    id: "probability-statistics-methods",
+    name: "Вероятностно-статистические методы анализа данных в принятии решений",
+    description: "ПР №1 - ПР №10",
+    basePrice: 1000,
     course: 2,
     semester: 4,
     fullCourseDiscount: 5,
     works: [
-      {
-        id: "practice-gost-excel",
-        title: "ГОСТ + Excel анализ",
-        price: 1250,
-        estimatedDays: 3
-      },
-      {
-        id: "practice-1-old",
-        title: "1. Системный анализ предприятия(Старое предприятие)",
-        price: 1250,
-        estimatedDays: 3
-      }, 
-      {
-        id: "practice-1-new",
-        title: "1. Системный анализ предприятия(Новое предприятие)",
-        price: 2250,
-        estimatedDays: 3
-      },
-      {
-        id: "practice-1-4-1-6",
-        title: "1.4-1.6. Анализ производственной структуры предприятия",
-        price: 2000,
-        estimatedDays: 2
-      },
-      {
-        id: "practice-2",
-        title: "2. Архитектурное моделирование в среде Archi",
-        price: 2500,
-        estimatedDays: 3
-      },
-      {
-        id: "practice-3",
-        title: "3. Процессное управление предприятием",
-        price: 2500,
-        estimatedDays: 2
-      },
-      {
-        id: "practice-4", 
-        title: "4. Управление проектами (в YouGile)",
-        price: 1250,
-        estimatedDays: 2
-      },
-      {
-        id: "practice-elma",
-        title: "5. Исполнение бизнес-процессов в среде Elma 365",
-        price: 1750,
-        estimatedDays: 3
-      },
-      {
-        id: "practice-7",
-        title: "7. Визуализация данных в Yandex Data Lens",
-        price: 1250,
-        estimatedDays: 3
-      },
-      {
-        id: "practice-orange",
-        title: "8. Предварительный анализ данных в Orange",
-        price: 1250,
-        estimatedDays: 2
-      },
-      {
-        id: "practice-python",
-        title: "9. Анализ данных на Python+SQL",
-        price: 1250,
-        estimatedDays: 4
-      }
-    ]
-  },
-  {
-    id: "stat-methods",
-    name: "Статистические методы",
-    description: "Практические работы по статистическим методам",
-    basePrice: 2000,
-    course: 2,
-    semester: 4,
-    fullCourseDiscount: 10,
-    works: [
-      { id: "stat-1", title: "ПР 1", description: "Статистические методы - Практическая работа №1", price: 1250, estimatedDays: 1 },
-      { id: "stat-2", title: "ПР 2", description: "Статистические методы - Практическая работа №2", price: 1250, estimatedDays: 1 },
-      { id: "stat-3", title: "ПР 3", description: "Статистические методы - Практическая работа №3", price: 1250, estimatedDays: 1 },
-      { id: "stat-4", title: "ПР 4", description: "Статистические методы - Практическая работа №4", price: 1250, estimatedDays: 1 },
-      { id: "stat-5", title: "ПР 5", description: "Статистические методы - Практическая работа №5", price: 1250, estimatedDays: 1 },
-      { id: "stat-6", title: "ПР 6", description: "Статистические методы - Практическая работа №6", price: 1250, estimatedDays: 1 },
-      { id: "stat-7", title: "ПР 7", description: "Статистические методы - Практическая работа №7", price: 1250, estimatedDays: 1 },
-      { id: "stat-8", title: "ПР 8", description: "Статистические методы - Практическая работа №8", price: 1250, estimatedDays: 1 },
-      { id: "stat-9", title: "ПР 9", description: "Статистические методы - Практическая работа №9", price: 1250, estimatedDays: 1 },
-      { id: "stat-10", title: "ПР 10", description: "Статистические методы - Практическая работа №10", price: 1250, estimatedDays: 1 },
-      { id: "stat-11", title: "ПР 11", description: "Статистические методы - Практическая работа №11", price: 1250, estimatedDays: 1 },
-      { id: "stat-12", title: "ПР 12", description: "Статистические методы - Практическая работа №12", price: 1250, estimatedDays: 1 }
-    ]
-  },
-  {
-    id: "pup",
-    name: "ПУП",
-    description: "Практики, ИКР, рефераты по проектированию программного обеспечения",
-    basePrice: 2200,
-    course: 2,
-    semester: 4,
-    fullCourseDiscount: 7,
-    works: [
-      { id: "pup-practice-1", title: "ПР 1", description: "ПУП - Практическая работа №1", price: 1250, estimatedDays: 2 },
-      { id: "pup-practice-2", title: "ПР 2", description: "ПУП - Практическая работа №2", price: 1250, estimatedDays: 2 },
-      { id: "pup-practice-3", title: "ПР 3", description: "ПУП - Практическая работа №3", price: 1250, estimatedDays: 2 },
-      { id: "pup-practice-4", title: "ПР 4", description: "ПУП - Практическая работа №4", price: 1250, estimatedDays: 2 },
-      {
-        id: "pup-5",
-        title: "ПР 5",
-        description: "Практическая работа №5. IDEF0",
-        price: 2000,
-        estimatedDays: 7
-      },
-      {
-        id: "pup-6",
-        title: "ПР 6",
-        description: "Практическая работа №6. EPC и BPMN",
-        price: 2500,
-        estimatedDays: 7
-      },
-      {
-        id: "pup-ikr",
-        title: "ИКР (Итоговая контрольная работа)",
-        description: "Итоговая контрольная работа по ПУП",
-        price: 1250,
-        estimatedDays: 7
-      },
-      {
-        id: "pup-referat",
-        title: "Реферат",
-        description: "Реферат — это небольшое письменное сообщение по определенной теме, основанное на обзоре различных источников",
-        price: 2000,
-        estimatedDays: 2
-      }
-    ]
-  },
-  {
-    id: "digital-economy",
-    name: "Цифровая экономика",
-    description: "Практические и лабораторные работы по цифровой экономике",
-    basePrice: 1800,
-    course: 2,
-    semester: 4,
-    fullCourseDiscount: 5,
-    works: [
-      { id: "digital-pr-1", title: "ПР 1", description: "Практическая работа №1 по цифровой экономике", price: 1250, estimatedDays: 1 },
-      { id: "digital-pr-2", title: "ПР 2", description: "Практическая работа №2 по цифровой экономике", price: 1250, estimatedDays: 1 },
-      { id: "digital-pr-3", title: "ПР 3", description: "Практическая работа №3 по цифровой экономике", price: 1250, estimatedDays: 1 },
-      { id: "digital-pr-4", title: "ПР 4", description: "Практическая работа №4 по цифровой экономике", price: 1250, estimatedDays: 1 },
-      { id: "digital-pr-5", title: "ПР 5", description: "Практическая работа №5 по цифровой экономике", price: 1250, estimatedDays: 1 },
-      { id: "digital-lr-1", title: "ЛР 1", description: "Лабораторная работа №1 по цифровой экономике", price: 1250, estimatedDays: 2 },
-      { id: "digital-lr-2", title: "ЛР 2", description: "Лабораторная работа №2 по цифровой экономике", price: 1250, estimatedDays: 2 },
-      { id: "digital-lr-3", title: "ЛР 3", description: "Лабораторная работа №3 по цифровой экономике", price: 1250, estimatedDays: 2 }
+      { id: "psm-pr-1", title: "ПР №1", price: 1000, estimatedDays: 2 },
+      { id: "psm-pr-2", title: "ПР №2", price: 1000, estimatedDays: 2 },
+      { id: "psm-pr-3", title: "ПР №3", price: 1000, estimatedDays: 2 },
+      { id: "psm-pr-4", title: "ПР №4", price: 1000, estimatedDays: 2 },
+      { id: "psm-pr-5", title: "ПР №5", price: 1000, estimatedDays: 2 },
+      { id: "psm-pr-6", title: "ПР №6", price: 1000, estimatedDays: 2 },
+      { id: "psm-pr-7", title: "ПР №7", price: 1000, estimatedDays: 2 },
+      { id: "psm-pr-8", title: "ПР №8", price: 1000, estimatedDays: 2 },
+      { id: "psm-pr-9", title: "ПР №9", price: 1000, estimatedDays: 2 },
+      { id: "psm-pr-10", title: "ПР №10", price: 1000, estimatedDays: 2 }
     ]
   },
   {
     id: "bp-modeling-4",
     name: "Моделирование бизнес-процессов",
-    description: "Практические работы по моделированию БП",
-    basePrice: 2000,
+    description: "ПР №1 - ПР №6",
+    basePrice: 1000,
     course: 2,
     semester: 4,
-    fullCourseDiscount: 7,
+    fullCourseDiscount: 5,
     works: [
-      { id: "bp-2", title: "ПР 2", description: "Моделирование БП - Практическая работа №2", price: 1250, estimatedDays: 3 },
-      { id: "bp-3", title: "ПР 3", description: "Моделирование БП - Практическая работа №3", price: 1250, estimatedDays: 3 },
-      { id: "bp-4", title: "ПР 4", description: "Моделирование БП - Практическая работа №4", price: 1250, estimatedDays: 3 },
-      { id: "bp-5", title: "ПР 5", description: "Моделирование БП - Практическая работа №5", price: 1250, estimatedDays: 3 }
+      { id: "bp4-pr-1", title: "ПР №1", price: 1000, estimatedDays: 2 },
+      { id: "bp4-pr-2", title: "ПР №2", price: 1000, estimatedDays: 2 },
+      { id: "bp4-pr-3", title: "ПР №3", price: 1000, estimatedDays: 2 },
+      { id: "bp4-pr-4", title: "ПР №4", price: 1000, estimatedDays: 2 },
+      { id: "bp4-pr-5", title: "ПР №5", price: 1000, estimatedDays: 2 },
+      { id: "bp4-pr-6", title: "ПР №6", price: 1000, estimatedDays: 2 }
     ]
   },
-
-  // 2 курс, 3 семестр - новые предметы
   {
-    id: "databases",
-    name: "Базы данных",
-    description: "Стоимость от 1000 Р",
+    id: "client-server-dev",
+    name: "Разработка клиент-серверных приложений",
+    description: "Python.ПР №1 - Python.ПР №5",
     basePrice: 1000,
     course: 2,
-    semester: 3,
-    isCustomForm: true,
-    priceNote: "Стоимость уточняется у администратора",
-    works: []
+    semester: 4,
+    fullCourseDiscount: 5,
+    works: [
+      { id: "csd-python-pr-1", title: "Python.ПР №1", price: 1000, estimatedDays: 2 },
+      { id: "csd-python-pr-2", title: "Python.ПР №2", price: 1000, estimatedDays: 2 },
+      { id: "csd-python-pr-3", title: "Python.ПР №3", price: 1000, estimatedDays: 2 },
+      { id: "csd-python-pr-4", title: "Python.ПР №4", price: 1000, estimatedDays: 2 },
+      { id: "csd-python-pr-5", title: "Python.ПР №5", price: 1000, estimatedDays: 2 }
+    ]
   },
   {
-    id: "bp-modeling-3",
-    name: "Моделирование бизнес-процессов",
-    description: "Стоимость от 1000 Р",
+    id: "enterprise-process-management",
+    name: "Процессное управление предприятием",
+    description: "ПР №1 - ПР №5",
     basePrice: 1000,
     course: 2,
-    semester: 3,
-    isCustomForm: true,
-    priceNote: "Стоимость уточняется у администратора",
-    works: []
+    semester: 4,
+    fullCourseDiscount: 5,
+    works: [
+      { id: "epm-pr-1", title: "ПР №1", price: 1000, estimatedDays: 2 },
+      { id: "epm-pr-2", title: "ПР №2", price: 1000, estimatedDays: 2 },
+      { id: "epm-pr-3", title: "ПР №3", price: 1000, estimatedDays: 2 },
+      { id: "epm-pr-4", title: "ПР №4", price: 1000, estimatedDays: 2 },
+      { id: "epm-pr-5", title: "ПР №5", price: 1000, estimatedDays: 2 }
+    ]
   },
   {
-    id: "management-theory",
-    name: "Теория и практика управления предприятием",
-    description: "Стоимость от 1000 Р",
+    id: "digital-economy-management",
+    name: "Цифровая экономика и менеджмент предприятия",
+    description: "ПР №1 - ПР №5 и ЛР №1 - ЛР №4",
     basePrice: 1000,
     course: 2,
-    semester: 3,
-    isCustomForm: true,
-    priceNote: "Стоимость уточняется у администратора",
-    works: []
-  },
-  {
-    id: "programming-tech",
-    name: "Технологии программирования",
-    description: "Стоимость от 1000 Р",
-    basePrice: 1000,
-    course: 2,
-    semester: 3,
-    isCustomForm: true,
-    priceNote: "Стоимость уточняется у администратора",
-    works: []
+    semester: 4,
+    fullCourseDiscount: 5,
+    works: [
+      { id: "dem-pr-1", title: "ПР №1", price: 1000, estimatedDays: 2 },
+      { id: "dem-pr-2", title: "ПР №2", price: 1000, estimatedDays: 2 },
+      { id: "dem-pr-3", title: "ПР №3", price: 1000, estimatedDays: 2 },
+      { id: "dem-pr-4", title: "ПР №4", price: 1000, estimatedDays: 2 },
+      { id: "dem-pr-5", title: "ПР №5", price: 1000, estimatedDays: 2 },
+      { id: "dem-lr-1", title: "ЛР №1", price: 1000, estimatedDays: 2 },
+      { id: "dem-lr-2", title: "ЛР №2", price: 1000, estimatedDays: 2 },
+      { id: "dem-lr-3", title: "ЛР №3", price: 1000, estimatedDays: 2 },
+      { id: "dem-lr-4", title: "ЛР №4", price: 1000, estimatedDays: 2 }
+    ]
   },
 
   // 3 курс, 5 семестр
@@ -333,8 +199,7 @@ export const subjectsData: SubjectData[] = [
       { id: "services-m2-pr-3", title: "Модуль 2. ПР №3", price: 1000, estimatedDays: 3 },
       { id: "services-m2-pr-4", title: "Модуль 2. ПР №4", price: 1250, estimatedDays: 3 }
     ]
-  }
-  ,
+  },
   {
     id: "bigdata-architecture",
     name: "Архитектура больших данных",
@@ -382,6 +247,104 @@ export const subjectsData: SubjectData[] = [
       { id: "knir1-pr7", title: "ПР7 Планирование проекта по разработке и внедрению информационной системы", price: 1250 },
       { id: "knir1-final", title: "Итоговый отчет", price: 1000 }
     ]
+  },
+  // 3 курс, 6 семестр
+  {
+    id: "fm-systems",
+    name: "Информационные системы управления экономикой, финансами, бюджетами (FM)",
+    description: "ПР №1-2, ЛР №1-2, групповой проект",
+    basePrice: 1000,
+    course: 3,
+    semester: 6,
+    fullCourseDiscount: 5,
+    works: [
+      { id: "fm-pr-1", title: "ПР №1", price: 1000, estimatedDays: 2 },
+      { id: "fm-pr-2", title: "ПР №2", price: 1000, estimatedDays: 2 },
+      { id: "fm-lr-1", title: "ЛР №1", price: 2000, estimatedDays: 3 },
+      { id: "fm-lr-2", title: "ЛР №2", price: 2000, estimatedDays: 3 },
+      { id: "fm-group-project", title: "Групповой проект", price: 5000, estimatedDays: 5 }
+    ]
+  },
+  {
+    id: "scm-logistics",
+    name: "Логистические системы и управление цепочками поставок (SCM)",
+    description: "ПР №1-3, ЛР №1-3",
+    basePrice: 1250,
+    course: 3,
+    semester: 6,
+    fullCourseDiscount: 5,
+    works: [
+      { id: "scm-pr-1", title: "ПР №1", price: 1250, estimatedDays: 2 },
+      { id: "scm-pr-2", title: "ПР №2", price: 1250, estimatedDays: 2 },
+      { id: "scm-pr-3", title: "ПР №3", price: 1250, estimatedDays: 2 },
+      { id: "scm-lr-1", title: "ЛР №1", price: 1250, estimatedDays: 2 },
+      { id: "scm-lr-2", title: "ЛР №2", price: 1250, estimatedDays: 2 },
+      { id: "scm-lr-3", title: "ЛР №3", price: 1250, estimatedDays: 2 }
+    ]
+  },
+  {
+    id: "is-design-management",
+    name: "Проектирование, управление разработкой, внедрением и изменениями информационных систем",
+    description: "ПР №1-6",
+    basePrice: 1250,
+    course: 3,
+    semester: 6,
+    fullCourseDiscount: 5,
+    works: [
+      { id: "isdm-pr-1", title: "ПР №1", price: 1250, estimatedDays: 2 },
+      { id: "isdm-pr-2", title: "ПР №2", price: 1250, estimatedDays: 2 },
+      { id: "isdm-pr-3", title: "ПР №3", price: 1250, estimatedDays: 2 },
+      { id: "isdm-pr-4", title: "ПР №4", price: 1250, estimatedDays: 2 },
+      { id: "isdm-pr-5", title: "ПР №5", price: 1250, estimatedDays: 2 },
+      { id: "isdm-pr-6", title: "ПР №6", price: 1250, estimatedDays: 2 }
+    ]
+  },
+  {
+    id: "hr-crm-srm",
+    name: "Управление человеческими ресурсами (HR), взаимоотношениями с клиентами(CRM) и поставщиками(SRM)",
+    description: "CRM №1-2, HRM, SRM, ECM",
+    basePrice: 1500,
+    course: 3,
+    semester: 6,
+    fullCourseDiscount: 5,
+    works: [
+      { id: "hrcrm-crm-1", title: "CRM №1", price: 1500, estimatedDays: 2 },
+      { id: "hrcrm-crm-2", title: "CRM №2", price: 1500, estimatedDays: 2 },
+      { id: "hrcrm-hrm", title: "HRM", price: 1500, estimatedDays: 2 },
+      { id: "hrcrm-srm", title: "SRM", price: 1500, estimatedDays: 2 },
+      { id: "hrcrm-ecm", title: "ECM", price: 1500, estimatedDays: 2 }
+    ]
+  },
+  {
+    id: "aps-mes-systems",
+    name: "Системы планирования и управления основным производством (APS/ MES)",
+    description: "ПР №1-4",
+    basePrice: 2000,
+    course: 3,
+    semester: 6,
+    fullCourseDiscount: 5,
+    works: [
+      { id: "aps-pr-1", title: "ПР №1", price: 2000, estimatedDays: 3 },
+      { id: "aps-pr-2", title: "ПР №2", price: 2000, estimatedDays: 3 },
+      { id: "aps-pr-3", title: "ПР №3", price: 2000, estimatedDays: 3 },
+      { id: "aps-pr-4", title: "ПР №4", price: 2000, estimatedDays: 3 }
+    ]
+  },
+  {
+    id: "business-performance-systems",
+    name: "Системы управления эффективностью, качеством и стратегией развития бизнеса",
+    description: "ПР №1-5",
+    basePrice: 1250,
+    course: 3,
+    semester: 6,
+    fullCourseDiscount: 5,
+    works: [
+      { id: "bps-pr-1", title: "ПР №1", price: 1250, estimatedDays: 2 },
+      { id: "bps-pr-2", title: "ПР №2", price: 1250, estimatedDays: 2 },
+      { id: "bps-pr-3", title: "ПР №3", price: 1250, estimatedDays: 2 },
+      { id: "bps-pr-4", title: "ПР №4", price: 1250, estimatedDays: 2 },
+      { id: "bps-pr-5", title: "ПР №5", price: 1250, estimatedDays: 2 }
+    ]
   }
 ];
 
@@ -416,12 +379,5 @@ export const calculateSelectedWorksPrice = (subject: SubjectData, selectedWorkId
 };
 
 export const getSemesterName = (course: number, semester: number): string => {
-  if (course === 1) {
-    return semester === 1 ? "1 семестр" : "2 семестр";
-  } else if (course === 2) {
-    return semester === 3 ? "3 семестр" : "4 семестр";
-  } else if (course === 3) {
-    return "5 семестр";
-  }
   return `${semester} семестр`;
 };

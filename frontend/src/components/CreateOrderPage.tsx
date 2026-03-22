@@ -84,11 +84,10 @@ const CreateOrderPage: React.FC = () => {
   useEffect(() => {
     loadSubjects();
     
-    // Автоматическое заполнение данных из Telegram
+    // Автоматическое заполнение только telegram (ФИО заполняется вручную)
     if (isInTelegram && user) {
       setFormData(prev => ({
         ...prev,
-        studentName: user.firstName + (user.lastName ? ` ${user.lastName}` : ''),
         studentTelegram: user.username ? `@${user.username}` : '',
       }));
     }
@@ -1029,6 +1028,7 @@ const CreateOrderPage: React.FC = () => {
                   value={formData.studentName}
                   onChange={(e) => setFormData(prev => ({ ...prev, studentName: e.target.value }))}
                   variant="outlined"
+                  helperText="Заполните ФИО вручную"
                   required
                 />
               </Grid>
@@ -1074,8 +1074,8 @@ const CreateOrderPage: React.FC = () => {
                   multiline
                   rows={3}
                   required
-                placeholder="Например: ПАО Транснефть, тема работы, исходные данные"
-                helperText="Укажите предприятие, тему/вариант и ключевые требования"
+                placeholder="Например: ПАО Транснефть - управление рисками, <тема работы>, <исходные данные>"
+                helperText="Укажите предприятие и бизнес-процесс/тему или вариант/ключевые требования"
                 />
               </Grid>
               <Grid item xs={12}>

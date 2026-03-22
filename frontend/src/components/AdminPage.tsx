@@ -123,7 +123,7 @@ const AdminPage: React.FC = () => {
 
   const getDefaultPayout = (order: Order) => {
     const base = order.actual_price ?? order.subject?.price ?? 0;
-    return base ? Math.round(base * 0.75 * 100) / 100 : 0;
+    return base ? Math.round(base * 0.8 * 100) / 100 : 0;
   };
 
   const handleOrderClick = (order: Order) => {

@@ -27,6 +27,7 @@ const statusLabels: Partial<Record<OrderStatus, string>> = {
   [OrderStatus.WAITING_PAYMENT]: 'Ожидание оплаты',
   [OrderStatus.PAID]: 'Оплачен',
   [OrderStatus.IN_PROGRESS]: 'В работе',
+  [OrderStatus.NEEDS_REVISION]: 'Нужны исправления',
   [OrderStatus.COMPLETED]: 'Выполнен',
 };
 
@@ -34,6 +35,7 @@ const allowedStatuses: OrderStatus[] = [
   OrderStatus.WAITING_PAYMENT,
   OrderStatus.PAID,
   OrderStatus.IN_PROGRESS,
+  OrderStatus.NEEDS_REVISION,
   OrderStatus.COMPLETED,
 ];
 
@@ -41,6 +43,7 @@ const statusBg: Partial<Record<OrderStatus, string>> = {
   [OrderStatus.WAITING_PAYMENT]: 'rgba(234, 179, 8, 0.12)',
   [OrderStatus.PAID]: 'rgba(14, 165, 233, 0.12)',
   [OrderStatus.IN_PROGRESS]: 'rgba(99, 102, 241, 0.12)',
+  [OrderStatus.NEEDS_REVISION]: 'rgba(244, 63, 94, 0.12)',
   [OrderStatus.COMPLETED]: 'rgba(16, 185, 129, 0.15)',
 };
 
@@ -48,6 +51,7 @@ const statusChip: Partial<Record<OrderStatus, { bg: string; color: string }>> = 
   [OrderStatus.WAITING_PAYMENT]: { bg: 'rgba(234,179,8,0.2)', color: '#a16207' },
   [OrderStatus.PAID]: { bg: 'rgba(14,165,233,0.2)', color: '#0ea5e9' },
   [OrderStatus.IN_PROGRESS]: { bg: 'rgba(99,102,241,0.2)', color: '#6366f1' },
+  [OrderStatus.NEEDS_REVISION]: { bg: 'rgba(244,63,94,0.2)', color: '#be123c' },
   [OrderStatus.COMPLETED]: { bg: 'rgba(16,185,129,0.2)', color: '#059669' },
 };
 
@@ -62,7 +66,7 @@ const OrdersBoard: React.FC = () => {
 
   const getDefaultPayout = (order: Order) => {
     const base = order.actual_price ?? order.subject?.price ?? 0;
-    return base ? Math.round(base * 0.75 * 100) / 100 : 0;
+    return base ? Math.round(base * 0.8 * 100) / 100 : 0;
   };
 
   useEffect(() => {
@@ -158,7 +162,6 @@ const OrdersBoard: React.FC = () => {
   }
 
   const visibleStatuses: OrderStatus[] = [
-    OrderStatus.WAITING_PAYMENT,
     OrderStatus.PAID,
     OrderStatus.IN_PROGRESS,
     OrderStatus.NEEDS_REVISION,
@@ -248,6 +251,19 @@ const OrdersBoard: React.FC = () => {
                 <Typography variant="body2" color="text.secondary" gutterBottom>
                   Описание: {order.description || '—'}
                 </Typography>
+                {order.status === OrderStatus.NEEDS_REVISION && (
+                  <>
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#be123c' }} gutterBottom>
+                      Исправления запрошены
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Комментарий к исправлению: {order.revision_comment || '—'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Оценка из Moodle: {order.revision_grade || '—'}
+                    </Typography>
+                  </>
+                )}
                 <Typography variant="body2" color="text.secondary" gutterBottom>
                   Файлы: {order.files?.length || 0}
                 </Typography>
