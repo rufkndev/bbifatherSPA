@@ -900,6 +900,7 @@ async def send_files_to_telegram_direct(request: Request):
 
 # Students endpoints
 @app.get("/api/students")
+@app.get("/students")
 def get_students():
     try:
         response = supabase.table('students').select('*').order('created_at', desc=True).execute()
@@ -908,11 +909,13 @@ def get_students():
         raise HTTPException(status_code=500, detail=f"Ошибка получения студентов: {str(e)}")
 
 @app.post("/api/students")
+@app.post("/students")
 def create_student(request: Request):
     pass  # Будет создаваться автоматически при создании заказа
 
 # Subjects endpoints
 @app.get("/api/subjects")
+@app.get("/subjects")
 def get_subjects():
     try:
         response = supabase.table('subjects') \
@@ -927,6 +930,7 @@ def get_subjects():
 
 # Orders endpoints
 @app.get("/api/orders")
+@app.get("/orders")
 def get_orders(page: int = 1, limit: int = 10, telegram: str = None):
     try:
         print(f"📥 GET /api/orders - page: {page}, limit: {limit}, telegram: {telegram}")
@@ -1005,6 +1009,7 @@ def get_orders(page: int = 1, limit: int = 10, telegram: str = None):
         raise HTTPException(status_code=500, detail=f"Ошибка на сервере при получении заказов: {str(e)}")
 
 @app.get("/api/orders/{order_id}")
+@app.get("/orders/{order_id}")
 def get_order(order_id: int):
     try:
         response = supabase.table('orders').select("""
@@ -1055,6 +1060,7 @@ def get_order(order_id: int):
         raise HTTPException(status_code=500, detail=f"Ошибка получения заказа: {str(e)}")
 
 @app.post("/api/orders")
+@app.post("/orders")
 async def create_order(request: Request):
     data = await request.json()
     
