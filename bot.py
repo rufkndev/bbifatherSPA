@@ -38,7 +38,7 @@ ADMIN_DYNAMIC_CHAT_IDS: Set[str] = set()
 SUPPORT_USERNAME = os.getenv("TELEGRAM_SUPPORT_USERNAME", "artemonsup")
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://bbifather.ru")
 API_BASE_URL = os.getenv("API_BASE_URL", "https://bbifather.ru/api")  # URL для API запросов
-FORCE_REFRESH_BOT_USERS_ON_STARTUP = os.getenv("FORCE_REFRESH_BOT_USERS_ON_STARTUP", "true").lower() == "true"
+FORCE_REFRESH_BOT_USERS_ON_STARTUP = os.getenv("FORCE_REFRESH_BOT_USERS_ON_STARTUP", "false").lower() == "true"
 
 if not BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN не задан в .env файле!")
@@ -60,28 +60,42 @@ class BBIFatherBot:
             api_url = f"{api_url}/api"
         return api_url
 
+    def get_backend_root_url(self) -> str:
+        """Нормализует корневой URL backend (без /api)."""
+        api_url = API_BASE_URL.rstrip("/")
+        if api_url.endswith("/api"):
+            return api_url[:-4]
+        return api_url
+
     async def force_refresh_all_users_keyboards(self):
         """Принудительное обновление клавиатуры для всех пользователей в базе."""
-        refresh_url = f"{self.get_api_base_url()}/bot/force-refresh-keyboards"
-        logger.info(f"♻️ Принудительное обновление меню пользователей: {refresh_url}")
+        refresh_urls = [
+            f"{self.get_api_base_url()}/bot/force-refresh-keyboards",
+            f"{self.get_backend_root_url()}/api/bot/force-refresh-keyboards"
+        ]
+        # Убираем дубликаты URL
+        refresh_urls = list(dict.fromkeys(refresh_urls))
+        logger.info(f"♻️ Принудительное обновление меню пользователей: {refresh_urls[0]}")
 
-        max_attempts = 5
+        max_attempts = 2
         for attempt in range(1, max_attempts + 1):
-            try:
-                response = await asyncio.to_thread(
-                    requests.post,
-                    refresh_url,
-                    timeout=20
-                )
-                if response.status_code == 200:
-                    logger.info(f"✅ Обновление меню выполнено: {response.text}")
-                    return
-                logger.warning(
-                    f"⚠️ Попытка {attempt}/{max_attempts}: не удалось обновить меню пользователей: "
-                    f"{response.status_code} {response.text}"
-                )
-            except Exception as e:
-                logger.error(f"❌ Попытка {attempt}/{max_attempts}: ошибка обновления меню пользователей: {e}")
+            for refresh_url in refresh_urls:
+                try:
+                    response = await asyncio.to_thread(
+                        requests.post,
+                        refresh_url,
+                        json={"silent": True},
+                        timeout=20
+                    )
+                    if response.status_code == 200:
+                        logger.info(f"✅ Обновление меню выполнено: {response.text}")
+                        return
+                    logger.warning(
+                        f"⚠️ Попытка {attempt}/{max_attempts}: не удалось обновить меню пользователей через {refresh_url}: "
+                        f"{response.status_code} {response.text}"
+                    )
+                except Exception as e:
+                    logger.error(f"❌ Попытка {attempt}/{max_attempts}: ошибка обновления меню пользователей через {refresh_url}: {e}")
 
             if attempt < max_attempts:
                 await asyncio.sleep(min(2 * attempt, 10))

@@ -456,7 +456,7 @@ def notify_executors_board_entry(order: dict):
     except Exception as e:
         print(f"⚠️ Ошибка отправки уведомления исполнителям: {e}")
 
-def force_refresh_all_user_keyboards() -> dict:
+def force_refresh_all_user_keyboards(silent: bool = True) -> dict:
     """Принудительно отправляет всем пользователям актуальную клавиатуру."""
     if not BOT_TOKEN:
         return {"status": "skipped", "reason": "BOT_TOKEN не настроен"}
@@ -491,16 +491,25 @@ def force_refresh_all_user_keyboards() -> dict:
         telegram_username = target["telegram"] or None
         payload = {
             "chat_id": target["chat_id"],
-            "text": (
-                "♻️ Бот обновлён.\n\n"
-                "Ниже отображается актуальное меню с кнопкой открытия мини-аппа."
-            ),
+            "text": ("\u200b" if silent else "Клавиатура бота обновлена."),
             "parse_mode": "HTML",
+            "disable_notification": True,
             "reply_markup": build_main_reply_keyboard(telegram_username)
         }
         response = post_telegram("sendMessage", payload)
         if response is not None and response.status_code == 200:
             sent += 1
+            if silent:
+                try:
+                    response_json = response.json()
+                    message_id = response_json.get("result", {}).get("message_id")
+                    if message_id:
+                        post_telegram("deleteMessage", {
+                            "chat_id": target["chat_id"],
+                            "message_id": message_id
+                        })
+                except Exception as e:
+                    print(f"⚠️ Не удалось удалить служебное сообщение для {target['chat_id']}: {e}")
         else:
             if response is not None and response.status_code == 403 and "blocked by the user" in response.text.lower():
                 blocked += 1
@@ -540,9 +549,32 @@ def read_root():
     return {"message": "Student Orders API is running"}
 
 @app.post("/api/bot/force-refresh-keyboards")
-async def force_refresh_keyboards():
+async def force_refresh_keyboards(request: Request):
     """Принудительное обновление клавиатуры для всех пользователей."""
-    result = force_refresh_all_user_keyboards()
+    silent = True
+    try:
+        body = await request.json()
+        if isinstance(body, dict) and "silent" in body:
+            silent = bool(body.get("silent"))
+    except Exception:
+        # Тело может отсутствовать, в этом случае используем silent=True по умолчанию.
+        pass
+
+    result = force_refresh_all_user_keyboards(silent=silent)
+    return result
+
+@app.post("/bot/force-refresh-keyboards")
+async def force_refresh_keyboards_compat(request: Request):
+    """Совместимость для прокси, который срезает префикс /api."""
+    silent = True
+    try:
+        body = await request.json()
+        if isinstance(body, dict) and "silent" in body:
+            silent = bool(body.get("silent"))
+    except Exception:
+        pass
+
+    result = force_refresh_all_user_keyboards(silent=silent)
     return result
 
 async def save_chat_id_handler(request: Request):
