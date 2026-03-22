@@ -491,7 +491,9 @@ def force_refresh_all_user_keyboards(silent: bool = True) -> dict:
         telegram_username = target["telegram"] or None
         payload = {
             "chat_id": target["chat_id"],
-            "text": ("\u200b" if silent else "Клавиатура бота обновлена."),
+            # Telegram не принимает zero-width text как непустой, поэтому отправляем минимальный служебный текст
+            # и сразу удаляем сообщение при silent=True.
+            "text": ("." if silent else "Клавиатура бота обновлена."),
             "parse_mode": "HTML",
             "disable_notification": True,
             "reply_markup": build_main_reply_keyboard(telegram_username)
