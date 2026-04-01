@@ -44,7 +44,7 @@ export const subjectsData: SubjectData[] = [
   {
     id: "probability-statistics-methods",
     name: "Вероятностно-статистические методы анализа данных в принятии решений",
-    description: "ПР №1 - ПР №10",
+    description: "ПР №1 - ПР №10, Курсовая работа",
     basePrice: 1000,
     course: 2,
     semester: 4,
@@ -59,7 +59,8 @@ export const subjectsData: SubjectData[] = [
       { id: "psm-pr-7", title: "ПР №7", price: 1000, estimatedDays: 2 },
       { id: "psm-pr-8", title: "ПР №8", price: 1000, estimatedDays: 2 },
       { id: "psm-pr-9", title: "ПР №9", price: 1000, estimatedDays: 2 },
-      { id: "psm-pr-10", title: "ПР №10", price: 1000, estimatedDays: 2 }
+      { id: "psm-pr-10", title: "ПР №10", price: 1000, estimatedDays: 2 },
+      { id: "psm-coursework", title: "Курсовая работа", price: 5000, estimatedDays: 5 }
     ]
   },
   {
@@ -73,32 +74,41 @@ export const subjectsData: SubjectData[] = [
     works: [
       { id: "bp4-pr-1", title: "ПР №1", price: 1000, estimatedDays: 2 },
       { id: "bp4-pr-2", title: "ПР №2", price: 1000, estimatedDays: 2 },
-      { id: "bp4-pr-3", title: "ПР №3", price: 1000, estimatedDays: 2 },
-      { id: "bp4-pr-4", title: "ПР №4", price: 1000, estimatedDays: 2 },
-      { id: "bp4-pr-5", title: "ПР №5", price: 1000, estimatedDays: 2 },
-      { id: "bp4-pr-6", title: "ПР №6", price: 1000, estimatedDays: 2 }
+      { id: "bp4-pr-3", title: "ПР №3", estimatedDays: 2 },
+      { id: "bp4-pr-4", title: "ПР №4", estimatedDays: 2 },
+      { id: "bp4-pr-5", title: "ПР №5", estimatedDays: 2 },
+      { id: "bp4-pr-6", title: "ПР №6", estimatedDays: 2 }
     ]
   },
   {
     id: "client-server-dev",
     name: "Разработка клиент-серверных приложений",
-    description: "Python.ПР №1 - Python.ПР №5",
+    description: "Реферат, Python.ПР №1-5, 1С.ПР №1-5, Elma.ПР №1-3",
     basePrice: 1000,
     course: 2,
     semester: 4,
     fullCourseDiscount: 5,
     works: [
+      { id: "csd-referat", title: "Реферат", price: 3000, estimatedDays: 3 },
       { id: "csd-python-pr-1", title: "Python.ПР №1", price: 1000, estimatedDays: 2 },
       { id: "csd-python-pr-2", title: "Python.ПР №2", price: 1000, estimatedDays: 2 },
       { id: "csd-python-pr-3", title: "Python.ПР №3", price: 1000, estimatedDays: 2 },
       { id: "csd-python-pr-4", title: "Python.ПР №4", price: 1000, estimatedDays: 2 },
-      { id: "csd-python-pr-5", title: "Python.ПР №5", price: 1000, estimatedDays: 2 }
+      { id: "csd-python-pr-5", title: "Python.ПР №5", price: 1000, estimatedDays: 2 },
+      { id: "csd-1c-pr-1", title: "1С.ПР №1", price: 500, estimatedDays: 2 },
+      { id: "csd-1c-pr-2", title: "1С.ПР №2", price: 1000, estimatedDays: 2 },
+      { id: "csd-1c-pr-3", title: "1С.ПР №3", price: 1500, estimatedDays: 2 },
+      { id: "csd-1c-pr-4", title: "1С.ПР №4", price: 2000, estimatedDays: 3 },
+      { id: "csd-1c-pr-5", title: "1С.ПР №5", price: 2000, estimatedDays: 3 },
+      { id: "csd-elma-pr-1", title: "Elma.ПР №1", price: 2000, estimatedDays: 3 },
+      { id: "csd-elma-pr-2", title: "Elma.ПР №2", price: 2000, estimatedDays: 3 },
+      { id: "csd-elma-pr-3", title: "Elma.ПР №3", price: 2000, estimatedDays: 3 }
     ]
   },
   {
     id: "enterprise-process-management",
     name: "Процессное управление предприятием",
-    description: "ПР №1 - ПР №5",
+    description: "ПР №1 - ПР №5, ИКР, Реферат",
     basePrice: 1000,
     course: 2,
     semester: 4,
@@ -106,15 +116,17 @@ export const subjectsData: SubjectData[] = [
     works: [
       { id: "epm-pr-1", title: "ПР №1", price: 1000, estimatedDays: 2 },
       { id: "epm-pr-2", title: "ПР №2", price: 1000, estimatedDays: 2 },
-      { id: "epm-pr-3", title: "ПР №3", price: 1000, estimatedDays: 2 },
-      { id: "epm-pr-4", title: "ПР №4", price: 1000, estimatedDays: 2 },
-      { id: "epm-pr-5", title: "ПР №5", price: 1000, estimatedDays: 2 }
+      { id: "epm-pr-3", title: "ПР №3", price: 1250, estimatedDays: 2 },
+      { id: "epm-pr-4", title: "ПР №4", price: 1250, estimatedDays: 2 },
+      { id: "epm-pr-5", title: "ПР №5", price: 1250, estimatedDays: 2 },
+      { id: "epm-ikr", title: "ИКР", price: 1000, estimatedDays: 2 },
+      { id: "epm-referat", title: "Реферат", price: 3000, estimatedDays: 3 }
     ]
   },
   {
     id: "digital-economy-management",
     name: "Цифровая экономика и менеджмент предприятия",
-    description: "ПР №1 - ПР №5 и ЛР №1 - ЛР №4",
+    description: "ПР №1 - ПР №5, ЛР №1 - ЛР №4, ИКР",
     basePrice: 1000,
     course: 2,
     semester: 4,
@@ -128,7 +140,8 @@ export const subjectsData: SubjectData[] = [
       { id: "dem-lr-1", title: "ЛР №1", price: 1000, estimatedDays: 2 },
       { id: "dem-lr-2", title: "ЛР №2", price: 1000, estimatedDays: 2 },
       { id: "dem-lr-3", title: "ЛР №3", price: 1000, estimatedDays: 2 },
-      { id: "dem-lr-4", title: "ЛР №4", price: 1000, estimatedDays: 2 }
+      { id: "dem-lr-4", title: "ЛР №4", price: 1000, estimatedDays: 2 },
+      { id: "dem-ikr", title: "ИКР", price: 1000, estimatedDays: 2 }
     ]
   },
 
@@ -268,7 +281,7 @@ export const subjectsData: SubjectData[] = [
   {
     id: "scm-logistics",
     name: "Логистические системы и управление цепочками поставок (SCM)",
-    description: "ПР №1-3, ЛР №1-3",
+    description: "ПР №1-4, ЛР №1-3, ИКР",
     basePrice: 1250,
     course: 3,
     semester: 6,
@@ -277,15 +290,18 @@ export const subjectsData: SubjectData[] = [
       { id: "scm-pr-1", title: "ПР №1", price: 1250, estimatedDays: 2 },
       { id: "scm-pr-2", title: "ПР №2", price: 1250, estimatedDays: 2 },
       { id: "scm-pr-3", title: "ПР №3", price: 1250, estimatedDays: 2 },
-      { id: "scm-lr-1", title: "ЛР №1", price: 1250, estimatedDays: 2 },
-      { id: "scm-lr-2", title: "ЛР №2", price: 1250, estimatedDays: 2 },
-      { id: "scm-lr-3", title: "ЛР №3", price: 1250, estimatedDays: 2 }
+      { id: "scm-pr-4", title: "ПР №4", price: 1250, estimatedDays: 2 },
+      { id: "scm-lr-1", title: "ЛР №1", price: 2500, estimatedDays: 3 },
+      { id: "scm-lr-2", title: "ЛР №2", price: 2500, estimatedDays: 3 },
+      { id: "scm-lr-3", title: "ЛР №3", price: 2500, estimatedDays: 3 },
+      { id: "scm-ikr", title: "ИКР", price: 1000, estimatedDays: 2 },
+      { id: "scm-individual", title: "Индивидуальное задание", estimatedDays: 3 }
     ]
   },
   {
     id: "is-design-management",
     name: "Проектирование, управление разработкой, внедрением и изменениями информационных систем",
-    description: "ПР №1-6",
+    description: "ПР №1-8, ИКР, Реферат",
     basePrice: 1250,
     course: 3,
     semester: 6,
@@ -294,46 +310,55 @@ export const subjectsData: SubjectData[] = [
       { id: "isdm-pr-1", title: "ПР №1", price: 1250, estimatedDays: 2 },
       { id: "isdm-pr-2", title: "ПР №2", price: 1250, estimatedDays: 2 },
       { id: "isdm-pr-3", title: "ПР №3", price: 1250, estimatedDays: 2 },
-      { id: "isdm-pr-4", title: "ПР №4", price: 1250, estimatedDays: 2 },
-      { id: "isdm-pr-5", title: "ПР №5", price: 1250, estimatedDays: 2 },
-      { id: "isdm-pr-6", title: "ПР №6", price: 1250, estimatedDays: 2 }
+      { id: "isdm-pr-4", title: "ПР №4", price: 1750, estimatedDays: 2 },
+      { id: "isdm-pr-5", title: "ПР №5", price: 1500, estimatedDays: 2 },
+      { id: "isdm-pr-6", title: "ПР №6", price: 2500, estimatedDays: 3 },
+      { id: "isdm-pr-7", title: "ПР №7", price: 2500, estimatedDays: 3 },
+      { id: "isdm-pr-8", title: "ПР №8", price: 1500, estimatedDays: 2 },
+      { id: "isdm-ikr", title: "ИКР", price: 1000, estimatedDays: 2 },
+      { id: "isdm-referat", title: "Реферат", price: 3000, estimatedDays: 3 }
     ]
   },
   {
     id: "hr-crm-srm",
     name: "Управление человеческими ресурсами (HR), взаимоотношениями с клиентами(CRM) и поставщиками(SRM)",
-    description: "CRM №1-2, HRM, SRM, ECM",
-    basePrice: 1500,
-    course: 3,
-    semester: 6,
-    fullCourseDiscount: 5,
-    works: [
-      { id: "hrcrm-crm-1", title: "CRM №1", price: 1500, estimatedDays: 2 },
-      { id: "hrcrm-crm-2", title: "CRM №2", price: 1500, estimatedDays: 2 },
-      { id: "hrcrm-hrm", title: "HRM", price: 1500, estimatedDays: 2 },
-      { id: "hrcrm-srm", title: "SRM", price: 1500, estimatedDays: 2 },
-      { id: "hrcrm-ecm", title: "ECM", price: 1500, estimatedDays: 2 }
-    ]
-  },
-  {
-    id: "aps-mes-systems",
-    name: "Системы планирования и управления основным производством (APS/ MES)",
-    description: "ПР №1-4",
+    description: "CRM №1-2, HRM, SRM, ECM, ИКР, Реферат, Обзор рынка",
     basePrice: 2000,
     course: 3,
     semester: 6,
     fullCourseDiscount: 5,
     works: [
+      { id: "hrcrm-crm-1", title: "CRM №1", price: 2000, estimatedDays: 2 },
+      { id: "hrcrm-crm-2", title: "CRM №2", price: 2000, estimatedDays: 2 },
+      { id: "hrcrm-hrm", title: "HRM", price: 2000, estimatedDays: 2 },
+      { id: "hrcrm-srm", title: "SRM", price: 2000, estimatedDays: 2 },
+      { id: "hrcrm-ecm", title: "ECM", price: 2000, estimatedDays: 2 },
+      { id: "hrcrm-ikr", title: "ИКР", price: 1000, estimatedDays: 2 },
+      { id: "hrcrm-referat", title: "Реферат", price: 3000, estimatedDays: 3 },
+      { id: "hrcrm-market-review", title: "Обзор рынка", price: 1250, estimatedDays: 2 }
+    ]
+  },
+  {
+    id: "aps-mes-systems",
+    name: "Системы планирования и управления основным производством (APS/ MES)",
+    description: "Реферат, ПР №1-5",
+    basePrice: 2000,
+    course: 3,
+    semester: 6,
+    fullCourseDiscount: 5,
+    works: [
+      { id: "aps-referat", title: "Реферат", price: 3000, estimatedDays: 3 },
       { id: "aps-pr-1", title: "ПР №1", price: 2000, estimatedDays: 3 },
       { id: "aps-pr-2", title: "ПР №2", price: 2000, estimatedDays: 3 },
       { id: "aps-pr-3", title: "ПР №3", price: 2000, estimatedDays: 3 },
-      { id: "aps-pr-4", title: "ПР №4", price: 2000, estimatedDays: 3 }
+      { id: "aps-pr-4", title: "ПР №4", price: 2000, estimatedDays: 3 },
+      { id: "aps-pr-5", title: "ПР №5", price: 2000, estimatedDays: 3 }
     ]
   },
   {
     id: "business-performance-systems",
     name: "Системы управления эффективностью, качеством и стратегией развития бизнеса",
-    description: "ПР №1-5",
+    description: "ПР №1-5, Реферат, ИКР",
     basePrice: 1250,
     course: 3,
     semester: 6,
@@ -341,9 +366,26 @@ export const subjectsData: SubjectData[] = [
     works: [
       { id: "bps-pr-1", title: "ПР №1", price: 1250, estimatedDays: 2 },
       { id: "bps-pr-2", title: "ПР №2", price: 1250, estimatedDays: 2 },
-      { id: "bps-pr-3", title: "ПР №3", price: 1250, estimatedDays: 2 },
-      { id: "bps-pr-4", title: "ПР №4", price: 1250, estimatedDays: 2 },
-      { id: "bps-pr-5", title: "ПР №5", price: 1250, estimatedDays: 2 }
+      { id: "bps-pr-3", title: "ПР №3", price: 1500, estimatedDays: 2 },
+      { id: "bps-pr-4", title: "ПР №4", price: 1500, estimatedDays: 2 },
+      { id: "bps-pr-5", title: "ПР №5", estimatedDays: 2 },
+      { id: "bps-referat", title: "Реферат", price: 3000, estimatedDays: 3 },
+      { id: "bps-ikr", title: "ИКР", price: 1000, estimatedDays: 2 }
+    ]
+  },
+  {
+    id: "bigdata-systems-design",
+    name: "Проектирование систем обработки больших данных",
+    description: "ПР №1-3, Групповой проект",
+    basePrice: 1500,
+    course: 3,
+    semester: 6,
+    fullCourseDiscount: 5,
+    works: [
+      { id: "bds-pr-1", title: "ПР №1", price: 1500, estimatedDays: 3 },
+      { id: "bds-pr-2", title: "ПР №2", price: 1500, estimatedDays: 3 },
+      { id: "bds-pr-3", title: "ПР №3", price: 1500, estimatedDays: 3 },
+      { id: "bds-group-project", title: "Групповой проект", price: 5000, estimatedDays: 7 }
     ]
   }
 ];

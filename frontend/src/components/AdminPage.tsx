@@ -685,14 +685,38 @@ const AdminPage: React.FC = () => {
               <Box sx={{ mt: 3 }}>
                 {/* Стоимость заказа и выплаты */}
                 <Box sx={{ mb: 2, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <TextField
-                    label="Стоимость, ₽"
-                    type="number"
-                    value={priceInput}
-                    onChange={(e) => setPriceInput(e.target.value)}
-                    sx={{ maxWidth: 240 }}
-                    inputProps={{ step: '50', min: '0' }}
-                  />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <TextField
+                      label="Стоимость, ₽"
+                      type="number"
+                      value={priceInput}
+                      onChange={(e) => {
+                        const newPrice = e.target.value;
+                        setPriceInput(newPrice);
+                        const parsed = parseFloat(newPrice.replace(',', '.'));
+                        if (!isNaN(parsed) && parsed >= 0) {
+                          setPayoutInput(String(Math.round(parsed * 0.8)));
+                        }
+                      }}
+                      sx={{ maxWidth: 200 }}
+                      inputProps={{ step: '50', min: '0' }}
+                    />
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      sx={{ minWidth: 0, px: 1, py: 0.5, fontSize: '0.7rem', whiteSpace: 'nowrap' }}
+                      onClick={() => {
+                        const parsed = parseFloat(priceInput.replace(',', '.'));
+                        if (!isNaN(parsed) && parsed >= 0) {
+                          const newPrice = Math.round(parsed * 1.25);
+                          setPriceInput(String(newPrice));
+                          setPayoutInput(String(Math.round(newPrice * 0.8)));
+                        }
+                      }}
+                    >
+                      +25%
+                    </Button>
+                  </Box>
                   <TextField
                     label="К выплате, ₽"
                     type="number"

@@ -25,6 +25,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Убираем спам из библиотек HTTP-уровня
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("telegram.vendor.ptb_urllib3").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+
 # Константы для бота (только то что нужно боту)
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 ADMIN_CHAT_ID = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "")  # ID администратора для тех поддержки
