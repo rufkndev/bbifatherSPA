@@ -73,6 +73,41 @@ print(f"🔧 DEBUG: TELEGRAM_ADMIN_CHAT_IDS raw value: '{_raw_admin_ids}'")
 ADMIN_CHAT_IDS = [cid.strip() for cid in _raw_admin_ids.split(",") if cid.strip()]
 print(f"🔧 DEBUG: ADMIN_CHAT_IDS parsed: {ADMIN_CHAT_IDS}")
 EXECUTOR_CHAT_IDS = ["814032949", "862151461", "5648974088"]
+BLOCKED_BOARD_EXECUTOR = "artemonsup"
+
+PAYMENT_METHOD_SBERBANK = "sberbank"
+PAYMENT_METHOD_OZONBANK = "ozonbank"
+PAYMENT_METHOD_ALFABANK = "alfabank"
+PAYMENT_METHOD_CASH = "cash"
+
+PAYMENT_METHODS = {
+    PAYMENT_METHOD_SBERBANK: {
+        "label": "СБЕРБАНК",
+        "is_cash": False,
+        "bank_name": "СБЕРБАНК",
+        "card_phone": "+7 962 120 63 60",
+        "recipient_name": "Таранов А. И.",
+    },
+    PAYMENT_METHOD_OZONBANK: {
+        "label": "ОЗОНБАНК",
+        "is_cash": False,
+        "bank_name": "ОЗОНБАНК",
+        "card_phone": "+7 962 120 63 60",
+        "recipient_name": "Таранов А. И.",
+    },
+    PAYMENT_METHOD_ALFABANK: {
+        "label": "АЛЬФАБАНК",
+        "is_cash": False,
+        "bank_name": "АЛЬФАБАНК",
+        "card_phone": "+7 962 120 63 60",
+        "recipient_name": "Таранов А. И.",
+    },
+    PAYMENT_METHOD_CASH: {
+        "label": "НАЛИЧНЫЕ",
+        "is_cash": True,
+        "cash_note": "Оплата наличными по согласованию с администратором.",
+    },
+}
 
 # URL для публичного доступа к файлам (для Telegram Bot API)
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://bbifather.ru")
@@ -255,6 +290,24 @@ def send_executor_notification(message: str):
         print(f"❌ Ошибка отправки исполнителям в Telegram: {e}")
         print(f"📱 УВЕДОМЛЕНИЕ: {message}")
 
+def normalize_executor_telegram(value: Optional[str]) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip().lstrip("@").lower()
+    return cleaned or None
+
+def is_blocked_board_executor(value: Optional[str]) -> bool:
+    return normalize_executor_telegram(value) == BLOCKED_BOARD_EXECUTOR
+
+def get_payment_details_for_order(order: dict) -> dict:
+    raw_method = str(order.get("payment_method") or "").strip().lower()
+    method = raw_method if raw_method in PAYMENT_METHODS else PAYMENT_METHOD_SBERBANK
+    details = PAYMENT_METHODS[method]
+    return {
+        "method": method,
+        **details
+    }
+
 async def send_status_notification_to_user(order: dict, new_status: str):
     """Отправка уведомления пользователю об изменении статуса заказа"""
     if not BOT_TOKEN:
@@ -378,6 +431,24 @@ async def send_status_notification_to_user(order: dict, new_status: str):
         if order.get('revision_comment'):
             notification_text += f"\n\n📋 <b>Комментарий:</b>\n{html.escape(str(order['revision_comment']))}"
     
+    if new_status == 'waiting_payment':
+        payment_details = get_payment_details_for_order(order)
+        if payment_details.get("is_cash"):
+            notification_text += (
+                "\n\n💵 <b>Формат оплаты:</b> НАЛИЧНЫЕ"
+                f"\nℹ️ {html.escape(str(payment_details.get('cash_note', 'Оплата наличными по согласованию.')))}"
+            )
+        else:
+            bank_name = html.escape(str(payment_details.get("bank_name", "")))
+            card_phone = html.escape(str(payment_details.get("card_phone", "")))
+            recipient_name = html.escape(str(payment_details.get("recipient_name", "")))
+            notification_text += (
+                "\n\n💳 <b>Реквизиты для оплаты</b>"
+                f"\n🏦 <b>Банк:</b> {bank_name}"
+                f"\n📱 <b>Карта/номер:</b> {card_phone}"
+                f"\n👤 <b>Получатель:</b> {recipient_name}"
+            )
+
     notification_text += "\n\n💬 Используйте меню бота для управления заказами"
     
     keyboard = build_main_reply_keyboard(user_telegram)
@@ -411,6 +482,9 @@ def notify_executors_board_entry(order: dict):
 
         status = order.get('status')
         if status not in ('paid', 'needs_revision'):
+            return
+        if is_blocked_board_executor(order.get('executor_telegram')):
+            print(f"ℹ️ Уведомление о доске пропущено: исполнитель @{BLOCKED_BOARD_EXECUTOR}")
             return
 
         subject_name = html.escape(str(order.get('subject', {}).get('name', 'Не указан')))
@@ -993,8 +1067,10 @@ def get_orders(page: int = 1, limit: int = 10, telegram: str = None):
                 },
                 'files': json.loads(order_data.get('files', '[]')) if isinstance(order_data.get('files'), str) else order_data.get('files', []),
                 'executor_telegram': order_data.get('executor_telegram'),
-                'payout_amount': order_data.get('payout_amount')
+                'payout_amount': order_data.get('payout_amount'),
+                'payment_method': order_data.get('payment_method')
             }
+            order['payment_details'] = get_payment_details_for_order(order)
             del order['students']
             del order['subjects']
             orders.append(order)
@@ -1047,6 +1123,8 @@ def get_order(order_id: int):
         }
         order['executor_telegram'] = order.get('executor_telegram')
         order['payout_amount'] = order.get('payout_amount')
+        order['payment_method'] = order.get('payment_method')
+        order['payment_details'] = get_payment_details_for_order(order)
         
         # Удаляем вложенные объекты
         del order['students']
@@ -1442,12 +1520,28 @@ async def update_order_admin(order_id: int, request: Request):
             except Exception:
                 raise HTTPException(status_code=400, detail="Некорректная сумма к выплате")
 
+        if 'payment_method' in data:
+            payment_method = str(data.get('payment_method') or '').strip().lower()
+            if payment_method and payment_method not in PAYMENT_METHODS:
+                raise HTTPException(status_code=400, detail="Некорректный способ оплаты")
+            update_payload['payment_method'] = payment_method or PAYMENT_METHOD_SBERBANK
+
         if not update_payload and not student_update:
             raise HTTPException(status_code=400, detail="Нет данных для обновления")
 
         update_payload['updated_at'] = datetime.now().isoformat()
 
-        response = supabase.table('orders').update(update_payload).eq('id', order_id).execute()
+        try:
+            response = supabase.table('orders').update(update_payload).eq('id', order_id).execute()
+        except Exception as e:
+            err_text = str(e).lower()
+            if 'payment_method' in update_payload and 'payment_method' in err_text and 'column' in err_text:
+                raise HTTPException(
+                    status_code=400,
+                    detail=("В БД отсутствует колонка orders.payment_method. "
+                            "Выполните SQL миграцию: ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'sberbank';")
+                )
+            raise
         if not response.data:
             raise HTTPException(status_code=404, detail="Заказ не найден")
 
@@ -1480,6 +1574,7 @@ async def update_order_price(order_id: int, request: Request):
     try:
         data = await request.json()
         price = data.get('price')
+        payment_method = str(data.get('payment_method') or '').strip().lower() if isinstance(data, dict) else ''
 
         if price is None:
             raise HTTPException(status_code=400, detail="Не указана цена (price)")
@@ -1501,11 +1596,27 @@ async def update_order_price(order_id: int, request: Request):
             new_status = 'waiting_payment'
 
         # Обновляем заказ в БД
-        response = supabase.table('orders').update({
+        update_payload = {
             'actual_price': price_value,
             'status': new_status,
             'updated_at': datetime.now().isoformat()
-        }).eq('id', order_id).execute()
+        }
+        if payment_method:
+            if payment_method not in PAYMENT_METHODS:
+                raise HTTPException(status_code=400, detail="Некорректный способ оплаты")
+            update_payload['payment_method'] = payment_method
+
+        try:
+            response = supabase.table('orders').update(update_payload).eq('id', order_id).execute()
+        except Exception as e:
+            err_text = str(e).lower()
+            if 'payment_method' in update_payload and 'payment_method' in err_text and 'column' in err_text:
+                raise HTTPException(
+                    status_code=400,
+                    detail=("В БД отсутствует колонка orders.payment_method. "
+                            "Выполните SQL миграцию: ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'sberbank';")
+                )
+            raise
 
         if not response.data:
             raise HTTPException(status_code=404, detail="Заказ не найден")

@@ -114,6 +114,11 @@ ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
 ALTER TABLE orders ADD CONSTRAINT orders_status_check 
     CHECK (status IN ('new', 'waiting_payment', 'paid', 'in_progress', 'completed', 'needs_revision', 'queued', 'under_review'));
 
+-- Выбор реквизитов для оплаты (админка): способ оплаты на уровне заказа
+ALTER TABLE orders
+    ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'sberbank'
+    CHECK (payment_method IN ('sberbank', 'ozonbank', 'alfabank', 'cash'));
+
 -- Если у ограничения статусa не было имени и DROP выше не сработал:
 -- Найдите имя CHECK-ограничения и удалите его
 -- (выполните, посмотрите conname, затем подставьте его в DROP CONSTRAINT)

@@ -27,7 +27,7 @@ import {
   Alert,
   CircularProgress
 } from '@mui/material';
-import { Order, OrderStatus } from '../types';
+import { Order, OrderStatus, PaymentMethod } from '../types';
 import { getAllOrders, updateOrderAdmin, markOrderAsPaid, uploadOrderFiles } from '../api';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -72,6 +72,13 @@ const rowBg: Partial<Record<OrderStatus, string>> = {
   [OrderStatus.COMPLETED]: 'rgba(16,185,129,0.08)',
 };
 
+const paymentMethodLabels: Record<PaymentMethod, string> = {
+  sberbank: 'СБЕРБАНК',
+  ozonbank: 'ОЗОНБАНК',
+  alfabank: 'АЛЬФАБАНК',
+  cash: 'НАЛИЧНЫЕ',
+};
+
 const AdminPage: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(
     localStorage.getItem('adminAuth') === 'true'
@@ -93,6 +100,7 @@ const AdminPage: React.FC = () => {
   const [deadlineInput, setDeadlineInput] = useState<string>('');
   const [studentNameInput, setStudentNameInput] = useState<string>('');
   const [studentGroupInput, setStudentGroupInput] = useState<string>('');
+  const [paymentMethodInput, setPaymentMethodInput] = useState<PaymentMethod>('sberbank');
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -143,13 +151,14 @@ const AdminPage: React.FC = () => {
     setDeadlineInput(order.deadline ? order.deadline.split('T')[0] : '');
     setStudentNameInput(order.student?.name || '');
     setStudentGroupInput(order.student?.group || '');
+    setPaymentMethodInput(order.payment_method || 'sberbank');
   };
 
   const handleStatusUpdate = async () => {
     await handleSaveAdmin();
   };
 
-  const handleSaveAdmin = async () => {
+  const handleSaveAdmin = async (statusOverride?: OrderStatus) => {
     if (!selectedOrder || !selectedOrder.id) return;
 
     try {
@@ -180,8 +189,9 @@ const AdminPage: React.FC = () => {
         actual_price: parsedPrice,
         payout_amount: parsedPayout,
         executor_telegram: executorInput.trim() ? executorInput.trim().replace('@', '') : null,
-        status: newStatus,
+        status: statusOverride || newStatus,
         is_paid: selectedOrder.is_paid,
+        payment_method: paymentMethodInput,
       };
 
       const updatedOrder = await updateOrderAdmin(selectedOrder.id, payload);
@@ -194,6 +204,12 @@ const AdminPage: React.FC = () => {
       console.error('Ошибка обновления заказа:', error);
       setError('Не удалось сохранить изменения заказа');
     }
+  };
+
+  const handleSetWaitingPayment = async () => {
+    if (!selectedOrder || !selectedOrder.id) return;
+    setNewStatus(OrderStatus.WAITING_PAYMENT);
+    await handleSaveAdmin(OrderStatus.WAITING_PAYMENT);
   };
 
   const handleMarkAsPaid = async () => {
@@ -738,6 +754,21 @@ const AdminPage: React.FC = () => {
                 </Box>
 
                 <FormControl fullWidth sx={{ mb: 2 }}>
+                  <InputLabel>Реквизиты для оплаты</InputLabel>
+                  <Select
+                    value={paymentMethodInput}
+                    onChange={(e) => setPaymentMethodInput(e.target.value as PaymentMethod)}
+                    label="Реквизиты для оплаты"
+                  >
+                    {Object.entries(paymentMethodLabels).map(([value, label]) => (
+                      <MenuItem key={value} value={value}>
+                        {label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <FormControl fullWidth sx={{ mb: 2 }}>
                   <InputLabel>Статус</InputLabel>
                   <Select
                     value={newStatus}
@@ -778,6 +809,16 @@ const AdminPage: React.FC = () => {
                     />
                   </Button>
                 </Box>
+
+                <Box sx={{ mb: 2 }}>
+                  <Button
+                    variant="contained"
+                    color="warning"
+                    onClick={handleSetWaitingPayment}
+                  >
+                    Поставить "Ожидание оплаты" с выбранными реквизитами
+                  </Button>
+                </Box>
                 
                 {selectedOrder.files && selectedOrder.files.length > 0 && (
                   <Box>
@@ -799,7 +840,7 @@ const AdminPage: React.FC = () => {
           <Button onClick={() => setDialogOpen(false)}>
             Отмена
           </Button>
-          <Button onClick={handleSaveAdmin} variant="contained">
+          <Button onClick={() => handleSaveAdmin()} variant="contained">
             Сохранить изменения
           </Button>
         </DialogActions>

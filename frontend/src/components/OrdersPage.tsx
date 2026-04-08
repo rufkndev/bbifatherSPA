@@ -27,7 +27,7 @@ import {
   Search as SearchIcon,
   Logout as LogoutIcon,
 } from '@mui/icons-material';
-import { Order, OrderStatus } from '../types';
+import { Order, OrderStatus, OrderPaymentDetails } from '../types';
 import { getAllOrders, downloadFile, downloadAllFiles, sendFilesToTelegram, api, requestOrderRevision } from '../api';
 import { format, differenceInDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -313,6 +313,20 @@ const OrdersPage: React.FC = () => {
     if (daysLeft === 0) return { text: 'Сегодня', color: 'warning' as const };
     if (daysLeft <= 3) return { text: `${daysLeft} дн.`, color: 'warning' as const };
     return { text: `${daysLeft} дн.`, color: 'default' as const };
+  };
+
+  const getPaymentDetails = (order: Order): OrderPaymentDetails => {
+    const details = order.payment_details;
+    if (details) return details;
+
+    return {
+      method: 'sberbank',
+      label: 'СБЕРБАНК',
+      is_cash: false,
+      bank_name: 'СБЕРБАНК',
+      card_phone: '+7 962 120 63 60',
+      recipient_name: 'Таранов А. И.',
+    };
   };
   
   const statsData = Object.entries(statusConfig).map(([status, config]) => ({
@@ -615,24 +629,45 @@ const OrdersPage: React.FC = () => {
                          >
                            💳 Реквизиты для оплаты
                          </Typography>
-                         <Typography 
-                           variant="body2" 
-                           sx={{ 
-                             mb: 1,
-                             fontSize: { xs: '0.8rem', sm: '0.875rem' }
-                           }}
-                         >
-                           <strong>Карта ГАЗПРОМБАНК:</strong> +7 962 120 63 60
-                         </Typography>
-                         <Typography 
-                           variant="body2" 
-                           sx={{ 
-                             mb: 1,
-                             fontSize: { xs: '0.8rem', sm: '0.875rem' }
-                           }}
-                         >
-                           <strong>Получатель:</strong> Таранов А. И.
-                         </Typography>
+                         {(() => {
+                           const paymentDetails = getPaymentDetails(order);
+                           if (paymentDetails.is_cash) {
+                             return (
+                               <Typography 
+                                 variant="body2" 
+                                 sx={{ 
+                                   mb: 1,
+                                   fontSize: { xs: '0.8rem', sm: '0.875rem' }
+                                 }}
+                               >
+                                 <strong>Формат оплаты:</strong> Наличными. {paymentDetails.cash_note || 'Оплата наличными по согласованию с администратором.'}
+                               </Typography>
+                             );
+                           }
+
+                           return (
+                             <>
+                               <Typography 
+                                 variant="body2" 
+                                 sx={{ 
+                                   mb: 1,
+                                   fontSize: { xs: '0.8rem', sm: '0.875rem' }
+                                 }}
+                               >
+                                 <strong>Карта {paymentDetails.bank_name || paymentDetails.label}:</strong> {paymentDetails.card_phone}
+                               </Typography>
+                               <Typography 
+                                 variant="body2" 
+                                 sx={{ 
+                                   mb: 1,
+                                   fontSize: { xs: '0.8rem', sm: '0.875rem' }
+                                 }}
+                               >
+                                 <strong>Получатель:</strong> {paymentDetails.recipient_name}
+                               </Typography>
+                             </>
+                           );
+                         })()}
                          <Typography 
                            variant="body2" 
                            sx={{ 

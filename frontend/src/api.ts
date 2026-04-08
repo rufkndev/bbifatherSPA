@@ -70,8 +70,8 @@ export const markOrderAsPaid = async (id: number): Promise<Order> => {
 };
 
 // Обновление цены заказа администратором
-export const updateOrderPrice = async (id: number, price: number): Promise<Order> => {
-  const response = await api.patch(`/api/orders/${id}/price`, { price });
+export const updateOrderPrice = async (id: number, price: number, payment_method?: string): Promise<Order> => {
+  const response = await api.patch(`/api/orders/${id}/price`, { price, payment_method });
   return response.data;
 };
 

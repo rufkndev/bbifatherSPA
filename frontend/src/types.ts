@@ -25,6 +25,18 @@ export enum OrderStatus {
   UNDER_REVIEW = 'under_review'
 }
 
+export type PaymentMethod = 'sberbank' | 'ozonbank' | 'alfabank' | 'cash';
+
+export interface OrderPaymentDetails {
+  method: PaymentMethod;
+  label: string;
+  is_cash: boolean;
+  bank_name?: string;
+  card_phone?: string;
+  recipient_name?: string;
+  cash_note?: string;
+}
+
 export interface Order {
   id?: number;
   student_id: number;
@@ -54,6 +66,8 @@ export interface Order {
   // Исполнитель и выплаты
   executor_telegram?: string | null;
   payout_amount?: number | null;
+  payment_method?: PaymentMethod;
+  payment_details?: OrderPaymentDetails;
 }
 
 export interface CreateOrderRequest {

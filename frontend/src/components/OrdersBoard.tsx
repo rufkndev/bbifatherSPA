@@ -55,6 +55,8 @@ const statusChip: Partial<Record<OrderStatus, { bg: string; color: string }>> = 
   [OrderStatus.COMPLETED]: { bg: 'rgba(16,185,129,0.2)', color: '#059669' },
 };
 
+const BLOCKED_EXECUTOR_TELEGRAM = 'artemonsup';
+
 const OrdersBoard: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,6 +171,7 @@ const OrdersBoard: React.FC = () => {
 
   const filteredOrders = orders
     .filter(o => visibleStatuses.includes(o.status))
+    .filter(o => (o.executor_telegram || '').trim().toLowerCase() !== BLOCKED_EXECUTOR_TELEGRAM)
     .filter(o => {
       if (!filterExecutor.trim()) return true;
       return (o.executor_telegram || '').toLowerCase().includes(filterExecutor.trim().replace('@', '').toLowerCase());
