@@ -368,7 +368,7 @@ export const subjectsData: SubjectData[] = [
       { id: "bps-pr-2", title: "ПР №2", price: 1250, estimatedDays: 2 },
       { id: "bps-pr-3", title: "ПР №3", price: 1500, estimatedDays: 2 },
       { id: "bps-pr-4", title: "ПР №4", price: 1500, estimatedDays: 2 },
-      { id: "bps-pr-5", title: "ПР №5", estimatedDays: 2 },
+      { id: "bps-pr-5", title: "ПР №5", price: 2000, estimatedDays: 2 },
       { id: "bps-referat", title: "Реферат", price: 3000, estimatedDays: 3 },
       { id: "bps-ikr", title: "ИКР", price: 1000, estimatedDays: 2 }
     ]
