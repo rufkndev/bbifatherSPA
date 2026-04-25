@@ -93,10 +93,18 @@
                 window.location.reload();
               });
 
+              navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'APP_UPDATED' && !refreshing) {
+                  refreshing = true;
+                  window.location.reload();
+                }
+              });
+
               // Проверяем обновления каждые 30 секунд
               setInterval(() => {
                 registration.update();
               }, 30000);
+              registration.update();
 
               // Слушаем обновления Service Worker
               registration.addEventListener('updatefound', () => {

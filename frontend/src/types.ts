@@ -3,6 +3,7 @@ export interface Student {
   name: string;
   group?: string;
   telegram?: string;
+  chat_id?: string;
   email?: string;
   phone?: string;
 }

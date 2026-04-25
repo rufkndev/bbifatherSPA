@@ -59,6 +59,16 @@ export const createOrder = async (orderData: CreateOrderRequest): Promise<Order>
   return response.data;
 };
 
+export const saveChatId = async (payload: {
+  telegram_username: string;
+  chat_id: string | number;
+  first_name?: string;
+  last_name?: string;
+}): Promise<{ status: string; message: string }> => {
+  const response = await api.post('/api/save-chat-id', payload);
+  return response.data;
+};
+
 export const updateOrderStatus = async (id: number, status: string): Promise<Order> => {
   const response = await api.patch(`/api/orders/${id}/status`, { status });
   return response.data;

@@ -273,7 +273,7 @@ export const subjectsData: SubjectData[] = [
     works: [
       { id: "fm-pr-1", title: "ПР №1", price: 1000, estimatedDays: 2 },
       { id: "fm-pr-2", title: "ПР №2", price: 1000, estimatedDays: 2 },
-      { id: "fm-lr-1", title: "ЛР №1", price: 2000, estimatedDays: 3 },
+      { id: "fm-lr-1", title: "ЛР №1", price: 1000, estimatedDays: 3 },
       { id: "fm-lr-2", title: "ЛР №2", price: 2000, estimatedDays: 3 },
       { id: "fm-group-project", title: "Групповой проект", price: 5000, estimatedDays: 5 }
     ]
@@ -291,6 +291,8 @@ export const subjectsData: SubjectData[] = [
       { id: "scm-pr-2", title: "ПР №2", price: 1250, estimatedDays: 2 },
       { id: "scm-pr-3", title: "ПР №3", price: 1250, estimatedDays: 2 },
       { id: "scm-pr-4", title: "ПР №4", price: 1250, estimatedDays: 2 },
+      { id: "scm-pr-5", title: "ПР №5", price: 1250, estimatedDays: 2 },
+      { id: "scm-pr-6", title: "ПР №6", price: 1250, estimatedDays: 2 },
       { id: "scm-lr-1", title: "ЛР №1", price: 2500, estimatedDays: 3 },
       { id: "scm-lr-2", title: "ЛР №2", price: 2500, estimatedDays: 3 },
       { id: "scm-lr-3", title: "ЛР №3", price: 2500, estimatedDays: 3 },
@@ -310,10 +312,10 @@ export const subjectsData: SubjectData[] = [
       { id: "isdm-pr-1", title: "ПР №1", price: 1250, estimatedDays: 2 },
       { id: "isdm-pr-2", title: "ПР №2", price: 1250, estimatedDays: 2 },
       { id: "isdm-pr-3", title: "ПР №3", price: 1250, estimatedDays: 2 },
-      { id: "isdm-pr-4", title: "ПР №4", price: 1750, estimatedDays: 2 },
+      { id: "isdm-pr-4", title: "ПР №4", price: 1500, estimatedDays: 2 },
       { id: "isdm-pr-5", title: "ПР №5", price: 1500, estimatedDays: 2 },
-      { id: "isdm-pr-6", title: "ПР №6", price: 2500, estimatedDays: 3 },
-      { id: "isdm-pr-7", title: "ПР №7", price: 2500, estimatedDays: 3 },
+      { id: "isdm-pr-6", title: "ПР №6", price: 2000, estimatedDays: 3 },
+      { id: "isdm-pr-7", title: "ПР №7", price: 2000, estimatedDays: 3 },
       { id: "isdm-pr-8", title: "ПР №8", price: 1500, estimatedDays: 2 },
       { id: "isdm-ikr", title: "ИКР", price: 1000, estimatedDays: 2 },
       { id: "isdm-referat", title: "Реферат", price: 3000, estimatedDays: 3 }
@@ -331,7 +333,7 @@ export const subjectsData: SubjectData[] = [
       { id: "hrcrm-crm-1", title: "CRM №1", price: 2000, estimatedDays: 2 },
       { id: "hrcrm-crm-2", title: "CRM №2", price: 2000, estimatedDays: 2 },
       { id: "hrcrm-hrm", title: "HRM", price: 2000, estimatedDays: 2 },
-      { id: "hrcrm-srm", title: "SRM", price: 2000, estimatedDays: 2 },
+      { id: "hrcrm-srm", title: "SRM(Временно не работает)", price: 2000, estimatedDays: 2 },
       { id: "hrcrm-ecm", title: "ECM", price: 2000, estimatedDays: 2 },
       { id: "hrcrm-ikr", title: "ИКР", price: 1000, estimatedDays: 2 },
       { id: "hrcrm-referat", title: "Реферат", price: 3000, estimatedDays: 3 },
@@ -348,11 +350,11 @@ export const subjectsData: SubjectData[] = [
     fullCourseDiscount: 5,
     works: [
       { id: "aps-referat", title: "Реферат", price: 3000, estimatedDays: 3 },
-      { id: "aps-pr-1", title: "ПР №1", price: 2000, estimatedDays: 3 },
-      { id: "aps-pr-2", title: "ПР №2", price: 2000, estimatedDays: 3 },
-      { id: "aps-pr-3", title: "ПР №3", price: 2000, estimatedDays: 3 },
-      { id: "aps-pr-4", title: "ПР №4", price: 2000, estimatedDays: 3 },
-      { id: "aps-pr-5", title: "ПР №5", price: 2000, estimatedDays: 3 }
+      { id: "aps-pr-1", title: "ПР №1 (временно недоступна лицензия)", price: 2000, estimatedDays: 3 },
+      { id: "aps-pr-2", title: "ПР №2 (временно недоступна лицензия)", price: 2000, estimatedDays: 3 },
+      { id: "aps-pr-3", title: "ПР №3 (временно недоступна лицензия)", price: 2000, estimatedDays: 3 },
+      { id: "aps-pr-4", title: "ПР №4 (временно недоступна лицензия)", price: 2000, estimatedDays: 3 },
+      { id: "aps-pr-5", title: "ПР №5 (временно недоступна лицензия)", price: 2000, estimatedDays: 3 }
     ]
   },
   {
@@ -370,7 +372,8 @@ export const subjectsData: SubjectData[] = [
       { id: "bps-pr-4", title: "ПР №4", price: 1500, estimatedDays: 2 },
       { id: "bps-pr-5", title: "ПР №5", price: 2000, estimatedDays: 2 },
       { id: "bps-referat", title: "Реферат", price: 3000, estimatedDays: 3 },
-      { id: "bps-ikr", title: "ИКР", price: 1000, estimatedDays: 2 }
+      { id: "bps-ikr", title: "ИКР", price: 1000, estimatedDays: 2 },
+      { id: "bps-nir", title: "НИР", price: 1500, estimatedDays: 3 }
     ]
   },
   {
@@ -385,6 +388,7 @@ export const subjectsData: SubjectData[] = [
       { id: "bds-pr-1", title: "ПР №1", price: 1500, estimatedDays: 3 },
       { id: "bds-pr-2", title: "ПР №2", price: 1500, estimatedDays: 3 },
       { id: "bds-pr-3", title: "ПР №3", price: 1500, estimatedDays: 3 },
+      { id: "bds-pr-4", title: "ПР №4", price: 1500, estimatedDays: 3 },
       { id: "bds-group-project", title: "Групповой проект", price: 5000, estimatedDays: 7 }
     ]
   }

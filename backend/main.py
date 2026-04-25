@@ -1,6 +1,7 @@
 import json
 import html
 import os
+import re
 import shutil
 import zipfile
 import tempfile
@@ -66,11 +67,23 @@ app.add_middleware(
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-BOT_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
-# Дополнительные админские чаты (через запятую)
+
+def parse_chat_ids(*raw_values: str) -> List[str]:
+    """Парсит chat_id из env: поддерживает запятые, точки с запятой и пробелы."""
+    chat_ids: List[str] = []
+    for raw_value in raw_values:
+        for chat_id in re.split(r"[\s,;]+", raw_value or ""):
+            cleaned = chat_id.strip()
+            if cleaned:
+                chat_ids.append(cleaned)
+    return list(dict.fromkeys(chat_ids))
+
+BOT_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "").strip() or os.getenv("TELEGRAM_ADMIN_CHAT_ID", "").strip()
+# Дополнительные админские чаты
 _raw_admin_ids = os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "")
+_legacy_admin_id = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "")
 print(f"🔧 DEBUG: TELEGRAM_ADMIN_CHAT_IDS raw value: '{_raw_admin_ids}'")
-ADMIN_CHAT_IDS = [cid.strip() for cid in _raw_admin_ids.split(",") if cid.strip()]
+ADMIN_CHAT_IDS = parse_chat_ids(_raw_admin_ids, _legacy_admin_id)
 print(f"🔧 DEBUG: ADMIN_CHAT_IDS parsed: {ADMIN_CHAT_IDS}")
 EXECUTOR_CHAT_IDS = ["814032949", "862151461", "5648974088"]
 BLOCKED_BOARD_EXECUTOR = "artemonsup"
@@ -163,6 +176,13 @@ def post_telegram(method: str, payload: dict, retries: int = 3, timeout: int = 1
             # Временные ошибки Telegram/сети
             if response.status_code in (429, 500, 502, 503, 504) and attempt < retries - 1:
                 wait_seconds = 1.5 * (attempt + 1)
+                if response.status_code == 429:
+                    try:
+                        retry_after = response.json().get("parameters", {}).get("retry_after")
+                        if isinstance(retry_after, (int, float)) and retry_after > 0:
+                            wait_seconds = max(wait_seconds, float(retry_after))
+                    except Exception:
+                        pass
                 time.sleep(wait_seconds)
                 continue
 
@@ -308,33 +328,77 @@ def get_payment_details_for_order(order: dict) -> dict:
         **details
     }
 
+def normalize_telegram_username(value: Optional[str]) -> str:
+    if not isinstance(value, str):
+        return ""
+    cleaned = value.strip()
+    if cleaned.startswith("https://t.me/"):
+        cleaned = cleaned.split("https://t.me/", 1)[1]
+    return cleaned.lstrip("@").strip().lower()
+
+def normalize_chat_id(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    if not cleaned or cleaned.lower() in {"none", "null", "nan"}:
+        return None
+    return cleaned if cleaned.lstrip("-").isdigit() else None
+
+def find_student_by_telegram(telegram_username: str, fields: str = "id, chat_id") -> Optional[dict]:
+    clean_telegram = normalize_telegram_username(telegram_username)
+    if not clean_telegram or not supabase:
+        return None
+
+    try:
+        response = supabase.table('students').select(fields).eq('telegram', clean_telegram).limit(1).execute()
+        if response.data:
+            return response.data[0]
+    except Exception as e:
+        print(f"⚠️ Ошибка точного поиска студента @{clean_telegram}: {e}")
+
+    try:
+        response = supabase.table('students').select(fields).ilike('telegram', clean_telegram).limit(1).execute()
+        if response.data:
+            return response.data[0]
+    except Exception as e:
+        print(f"⚠️ Ошибка нечувствительного к регистру поиска студента @{clean_telegram}: {e}")
+
+    return None
+
 async def send_status_notification_to_user(order: dict, new_status: str):
     """Отправка уведомления пользователю об изменении статуса заказа"""
     if not BOT_TOKEN:
         print("⚠️ BOT_TOKEN не настроен для уведомлений пользователей")
         return
         
-    user_telegram = order['student'].get('telegram')
+    user_telegram = normalize_telegram_username(order['student'].get('telegram'))
     if not user_telegram:
         print("⚠️ У пользователя не указан telegram")
         return
     
-    # Получаем chat_id пользователя из БД (или fallback на @username)
+    # Получаем chat_id пользователя из БД. Telegram Bot API не умеет надежно писать
+    # обычным пользователям по @username, поэтому нужен сохраненный numeric chat_id.
     notification_target = None
     try:
-        student_response = supabase.table('students').select('chat_id').eq('telegram', user_telegram).limit(1).execute()
+        student_id = order.get('student', {}).get('id')
+        if student_id:
+            student_response = supabase.table('students').select('chat_id').eq('id', student_id).limit(1).execute()
+            if student_response.data:
+                notification_target = normalize_chat_id(student_response.data[0].get('chat_id'))
 
-        if student_response.data and student_response.data[0].get('chat_id'):
-            notification_target = student_response.data[0]['chat_id']
+        if not notification_target:
+            student = find_student_by_telegram(user_telegram, fields="id, chat_id")
+            notification_target = normalize_chat_id(student.get('chat_id')) if student else None
+
+        if notification_target:
             print(f"📱 Отправляем уведомление пользователю @{user_telegram} (chat_id: {notification_target})")
         else:
-            # Пытаемся отправить по username, чтобы не терять уведомление
-            notification_target = f"@{user_telegram}"
-            print(f"⚠️ Chat ID не найден для @{user_telegram}, fallback на username")
+            print(f"⚠️ Chat ID не найден для @{user_telegram}. Пользователь должен открыть мини-апп или написать боту.")
+            return
 
     except Exception as e:
         print(f"❌ Ошибка получения chat_id: {e}")
-        notification_target = f"@{user_telegram}"
+        return
     
     # Сообщения для разных статусов
     status_messages = {
@@ -470,6 +534,14 @@ async def send_status_notification_to_user(order: dict, new_status: str):
             print(f"✅ Уведомление о статусе '{new_status}' отправлено пользователю @{user_telegram}")
         else:
             print(f"⚠️ Не удалось отправить уведомление @{user_telegram}: {response.text}")
+            if response.status_code == 403 and "blocked by the user" in response.text.lower():
+                try:
+                    student_id = order.get('student', {}).get('id')
+                    if student_id:
+                        supabase.table('students').update({'chat_id': None}).eq('id', student_id).execute()
+                        print(f"🧹 Chat ID очищен для студента ID {student_id}: бот заблокирован")
+                except Exception as cleanup_error:
+                    print(f"⚠️ Не удалось очистить chat_id после блокировки: {cleanup_error}")
             
     except Exception as e:
         print(f"❌ Ошибка отправки уведомления пользователю @{user_telegram}: {e}")
@@ -663,8 +735,8 @@ async def save_chat_id_handler(request: Request):
     """Общий обработчик для сохранения chat_id пользователя"""
     try:
         data = await request.json()
-        telegram_username = data.get('telegram_username', '').lstrip('@')
-        chat_id = data.get('chat_id')
+        telegram_username = normalize_telegram_username(data.get('telegram_username', ''))
+        chat_id = normalize_chat_id(data.get('chat_id'))
         first_name = data.get('first_name', '')
         last_name = data.get('last_name', '')
         
@@ -674,14 +746,14 @@ async def save_chat_id_handler(request: Request):
             raise HTTPException(status_code=400, detail="Не указан telegram_username или chat_id")
         
         # Находим студента по telegram username
-        student_response = supabase.table('students').select('id').eq('telegram', telegram_username).limit(1).execute()
+        existing_student = find_student_by_telegram(telegram_username, fields="id")
         
-        if student_response.data:
+        if existing_student:
             # Обновляем существующего студента
-            student_id = student_response.data[0]['id']
+            student_id = existing_student['id']
             supabase.table('students').update({
-                'chat_id': str(chat_id),
-                'name': first_name + (' ' + last_name if last_name else '')
+                'telegram': telegram_username,
+                'chat_id': str(chat_id)
             }).eq('id', student_id).execute()
             print(f"✅ Chat ID обновлен для студента @{telegram_username} (ID: {student_id})")
         else:
@@ -1162,36 +1234,41 @@ async def create_order(request: Request):
         if not student_data.get('name') or not student_data.get('group') or not student_data.get('telegram'):
             raise HTTPException(status_code=400, detail="Заполните ФИО, группу и Telegram")
 
-        # Убираем @ из ника
-        raw_telegram = str(student_data.get('telegram', '')).strip()
-        if raw_telegram.startswith('https://t.me/'):
-            raw_telegram = raw_telegram.split('https://t.me/', 1)[1]
-        clean_telegram = raw_telegram.lstrip('@').strip()
+        # Убираем @ из ника и нормализуем регистр
+        clean_telegram = normalize_telegram_username(student_data.get('telegram', ''))
+        student_chat_id = normalize_chat_id(student_data.get('chat_id'))
         if not clean_telegram:
             raise HTTPException(status_code=400, detail="Некорректный Telegram. Укажите username в формате @username")
         print(f"👤 Обработка студента: @{clean_telegram}")
         
         # Проверяем существует ли студент
-        existing_student = supabase.table('students').select('id').eq('telegram', clean_telegram).limit(1).execute()
-        print(f"🔍 Поиск существующего студента: {existing_student}")
+        existing_student_data = find_student_by_telegram(clean_telegram, fields="id")
+        print(f"🔍 Поиск существующего студента: {existing_student_data}")
         
-        if existing_student.data and len(existing_student.data) > 0:
-            student_id = existing_student.data[0]['id']
+        if existing_student_data:
+            student_id = existing_student_data['id']
             print(f"👤 Найден существующий студент ID: {student_id}")
             # Обновляем данные студента
-            update_result = supabase.table('students').update({
+            student_update_payload = {
                 'name': student_data['name'],
-                'group_name': student_data['group']
-            }).eq('id', student_id).execute()
+                'group_name': student_data['group'],
+                'telegram': clean_telegram
+            }
+            if student_chat_id:
+                student_update_payload['chat_id'] = student_chat_id
+            update_result = supabase.table('students').update(student_update_payload).eq('id', student_id).execute()
             print(f"📝 Обновление данных студента: {update_result}")
         else:
             # Создаем нового студента
             print(f"➕ Создаем нового студента: {student_data}")
-            new_student = supabase.table('students').insert({
+            new_student_payload = {
                 'name': student_data['name'],
                 'group_name': student_data['group'],
                 'telegram': clean_telegram
-            }).execute()
+            }
+            if student_chat_id:
+                new_student_payload['chat_id'] = student_chat_id
+            new_student = supabase.table('students').insert(new_student_payload).execute()
             print(f"✅ Результат создания студента: {new_student}")
             student_id = new_student.data[0]['id']
             print(f"👤 Создан новый студент ID: {student_id}")

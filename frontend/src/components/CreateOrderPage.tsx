@@ -356,6 +356,7 @@ const CreateOrderPage: React.FC = () => {
           name: formData.studentName,
           group: formData.studentGroup,
           telegram: formData.studentTelegram,
+          chat_id: user?.id ? String(user.id) : undefined,
         },
         subject_id: finalSubjectId,
         title,

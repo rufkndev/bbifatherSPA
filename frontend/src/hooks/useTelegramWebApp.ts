@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { saveChatId } from '../api';
 
 interface TelegramWebApp {
   ready: () => void;
@@ -163,6 +164,17 @@ export const useTelegramWebApp = () => {
           isPremium: telegramUser.is_premium,
           photoUrl: telegramUser.photo_url,
         });
+
+        if (telegramUser.username && telegramUser.id) {
+          saveChatId({
+            telegram_username: telegramUser.username,
+            chat_id: telegramUser.id,
+            first_name: telegramUser.first_name,
+            last_name: telegramUser.last_name || '',
+          }).catch((error) => {
+            console.warn('Не удалось сохранить Telegram chat_id:', error);
+          });
+        }
       }
       
       // Устанавливаем цветовую схему
