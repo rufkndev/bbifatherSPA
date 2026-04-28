@@ -71,17 +71,23 @@ class BBIFatherBot:
 
     async def on_post_init(self, application: Application):
         """Действия сразу после запуска приложения."""
-        await application.bot.set_my_commands([
-            BotCommand("start", "Открыть главное меню"),
-            BotCommand("help", "Как пользоваться сервисом"),
-            BotCommand("rules", "Правила сервиса"),
-            BotCommand("support", "Связаться с поддержкой"),
-            BotCommand("id", "Показать ваш Telegram ID"),
-        ])
-        logger.info("✅ Команды Telegram-бота обновлены")
+        try:
+            await application.bot.set_my_commands([
+                BotCommand("start", "Открыть главное меню"),
+                BotCommand("help", "Как пользоваться сервисом"),
+                BotCommand("rules", "Правила сервиса"),
+                BotCommand("support", "Связаться с поддержкой"),
+                BotCommand("id", "Показать ваш Telegram ID"),
+            ])
+            logger.info("✅ Команды Telegram-бота обновлены")
+        except Exception as e:
+            logger.error(f"⚠️ Не удалось обновить команды Telegram, бот продолжит запуск: {e}")
 
         if FORCE_REFRESH_BOT_USERS_ON_STARTUP:
-            await self.force_refresh_all_users_keyboards()
+            try:
+                await self.force_refresh_all_users_keyboards()
+            except Exception as e:
+                logger.error(f"⚠️ Не удалось принудительно обновить клавиатуры, бот продолжит запуск: {e}")
 
     def get_api_base_url(self) -> str:
         """Нормализует базовый URL API с суффиксом /api."""
@@ -509,6 +515,10 @@ class BBIFatherBot:
             # Запускаем polling с правильными настройками
             self.app.run_polling(
                 drop_pending_updates=True,
+                bootstrap_retries=-1,
+                timeout=30,
+                connect_timeout=20,
+                read_timeout=20,
                 close_loop=False,
                 stop_signals=None  # Для Windows
             )

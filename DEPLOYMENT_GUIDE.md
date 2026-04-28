@@ -700,6 +700,8 @@ htop
 df -h
 ```
 
+
+
 python backend/main.py & python bot.py & wait
 pkill -f "python bot.py" && pkill -f "python backend/main.py"
 
@@ -708,3 +710,8 @@ cd ../frontend
 npm run build
 sudo cp -r build/* /var/www/bbifather/
 sudo systemctl reload nginx
+
+git diff -- frontend/src/api.ts
+git stash push -m "server local api.ts before pull" -- frontend/src/api.ts
+git pull
+git stash pop
