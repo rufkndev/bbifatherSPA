@@ -303,6 +303,7 @@ class BBIFatherBot:
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка команды /start"""
         user = update.effective_user
+        logger.info(f"▶️ Команда /start от {user.username or user.first_name} ({user.id})")
         
         # Сохраняем chat_id пользователя для отправки уведомлений (без задержки ответа)
         asyncio.create_task(self.save_user_chat_id(user))
@@ -331,6 +332,8 @@ class BBIFatherBot:
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка команды /help"""
+        user = update.effective_user
+        logger.info(f"▶️ Команда /help от {user.username or user.first_name} ({user.id})")
         help_text = """
 📖 <b>Справка по боту BBI Father</b>
 
@@ -361,10 +364,14 @@ class BBIFatherBot:
 
     async def rules_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка команды /rules"""
+        user = update.effective_user
+        logger.info(f"▶️ Команда /rules от {user.username or user.first_name} ({user.id})")
         await self.send_rules(update, context)
 
     async def support_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработка команды /support"""
+        user = update.effective_user
+        logger.info(f"▶️ Команда /support от {user.username or user.first_name} ({user.id})")
         await self.handle_support_request(update, context)
 
     def get_webapp_url(self, username: Optional[str] = None) -> str:
@@ -474,6 +481,7 @@ class BBIFatherBot:
     async def id_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показывает пользователю его chat_id и username для настройки уведомлений"""
         user = update.effective_user
+        logger.info(f"▶️ Команда /id от {user.username or user.first_name} ({user.id})")
         text = (
             f"🆔 Ваш Telegram ID: <code>{user.id}</code>\n"
             f"👤 Username: @{user.username or 'не указан'}"

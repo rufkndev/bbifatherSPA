@@ -1422,6 +1422,7 @@ async def create_order(request: Request, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail="Внутренняя ошибка при создании заказа")
 
 @app.patch("/api/orders/{order_id}/status")
+@app.patch("/orders/{order_id}/status")
 async def update_order_status(order_id: int, request: Request, background_tasks: BackgroundTasks):
     data = await request.json()
     status = data['status']
@@ -1471,6 +1472,7 @@ async def update_order_status(order_id: int, request: Request, background_tasks:
         raise HTTPException(status_code=500, detail=f"Ошибка обновления статуса: {str(e)}")
 
 @app.patch("/api/orders/{order_id}/paid")
+@app.patch("/orders/{order_id}/paid")
 async def mark_order_as_paid(order_id: int, background_tasks: BackgroundTasks):
     try:
         old_order = get_order(order_id)
@@ -1507,6 +1509,7 @@ async def mark_order_as_paid(order_id: int, background_tasks: BackgroundTasks):
 
 
 @app.patch("/api/orders/{order_id}/executor")
+@app.patch("/orders/{order_id}/executor")
 async def update_order_executor(order_id: int, request: Request):
     """Установка или снятие исполнителя и суммы к выплате"""
     try:
@@ -1541,6 +1544,7 @@ async def update_order_executor(order_id: int, request: Request):
 
 
 @app.patch("/api/orders/{order_id}/admin")
+@app.patch("/orders/{order_id}/admin")
 async def update_order_admin(order_id: int, request: Request, background_tasks: BackgroundTasks):
     """Полное редактирование заказа (кроме телеграма студента)"""
     try:
@@ -1667,6 +1671,7 @@ async def update_order_admin(order_id: int, request: Request, background_tasks: 
         raise HTTPException(status_code=500, detail=f"Ошибка админ-обновления: {str(e)}")
 
 @app.patch("/api/orders/{order_id}/price")
+@app.patch("/orders/{order_id}/price")
 async def update_order_price(order_id: int, request: Request, background_tasks: BackgroundTasks):
     """Обновление стоимости заказа администратором и перевод в статус 'ожидание оплаты'"""
     try:
@@ -1737,6 +1742,7 @@ async def update_order_price(order_id: int, request: Request, background_tasks: 
         raise HTTPException(status_code=500, detail=f"Ошибка обновления цены: {str(e)}")
 
 @app.post("/api/orders/{order_id}/files")
+@app.post("/orders/{order_id}/files")
 async def upload_order_files(
     order_id: int,
     background_tasks: BackgroundTasks,
@@ -1937,6 +1943,7 @@ startxref 467
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки файлов: {str(e)}")
 
 @app.get("/api/file-upload-info")
+@app.get("/file-upload-info")
 async def get_file_upload_info():
     """Получение информации о поддерживаемых типах файлов и ограничениях"""
     return {
@@ -1972,6 +1979,7 @@ async def get_file_upload_info():
     }
 
 @app.get("/api/orders/{order_id}/download/{filename}")
+@app.get("/orders/{order_id}/download/{filename}")
 async def download_file(order_id: int, filename: str):
     """Скачивание файла по заказу"""
     try:
@@ -2056,6 +2064,7 @@ def safe_cleanup_file(filepath: str):
         print(f"⚠️ Не удалось удалить временный файл {filepath}: {e}")
 
 @app.get("/api/orders/{order_id}/download-all")
+@app.get("/orders/{order_id}/download-all")
 async def download_all_files(order_id: int, background_tasks: BackgroundTasks):
     """Скачивание всех файлов заказа в zip архиве"""
     try:
@@ -2109,6 +2118,7 @@ async def download_all_files(order_id: int, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail=f"Ошибка архивирования файлов: {str(e)}")
 
 @app.post("/api/orders/{order_id}/payment-notification")
+@app.post("/orders/{order_id}/payment-notification")
 async def notify_payment(order_id: int, background_tasks: BackgroundTasks):
     """Уведомление администратора об оплате заказа студентом"""
     try:
@@ -2189,6 +2199,7 @@ async def notify_payment(order_id: int, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail=f"Ошибка отправки уведомления: {str(e)}")
 
 @app.post("/api/orders/{order_id}/request-revision")
+@app.post("/orders/{order_id}/request-revision")
 async def request_order_revision(order_id: int, request: Request, background_tasks: BackgroundTasks):
     """Запрос исправлений для заказа"""
     data = await request.json()
@@ -2248,6 +2259,7 @@ async def request_order_revision(order_id: int, request: Request, background_tas
         raise HTTPException(status_code=500, detail=f"Ошибка запроса исправлений: {str(e)}")
 
 @app.post("/api/test-notification")
+@app.post("/test-notification")
 async def test_notification():
     """Тестовая отправка уведомления"""
     try:
