@@ -577,8 +577,8 @@ class BBIFatherBot:
         try:
             # Запускаем polling с правильными настройками
             self.app.run_polling(
-                drop_pending_updates=True,
-                bootstrap_retries=0,
+                drop_pending_updates=False,
+                bootstrap_retries=3,
                 timeout=int(TELEGRAM_GET_UPDATES_READ_TIMEOUT),
                 close_loop=False,
                 stop_signals=None  # Для Windows
