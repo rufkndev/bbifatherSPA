@@ -58,8 +58,15 @@ ADMIN_DYNAMIC_CHAT_IDS: Set[str] = set()
 # Username для отображения в /support
 SUPPORT_USERNAME = os.getenv("TELEGRAM_SUPPORT_USERNAME", "artemonsup")
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://bbifather.ru")
-API_BASE_URL = os.getenv("API_BASE_URL", "https://bbifather.ru/api")  # URL для API запросов
+# Бот и backend обычно работают на одном сервере. Локальный адрес не зависит от nginx
+# и не ловит 502, пока публичный прокси еще поднимается.
+API_BASE_URL = (
+    os.getenv("BOT_API_BASE_URL")
+    or os.getenv("INTERNAL_API_BASE_URL")
+    or "http://127.0.0.1:8000/api"
+)
 FORCE_REFRESH_BOT_USERS_ON_STARTUP = os.getenv("FORCE_REFRESH_BOT_USERS_ON_STARTUP", "true").lower() == "true"
+FORCE_REFRESH_STARTUP_DELAY_SECONDS = float(os.getenv("FORCE_REFRESH_STARTUP_DELAY_SECONDS", "3"))
 
 if not BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN не задан в .env файле!")
@@ -84,10 +91,16 @@ class BBIFatherBot:
             logger.error(f"⚠️ Не удалось обновить команды Telegram, бот продолжит запуск: {e}")
 
         if FORCE_REFRESH_BOT_USERS_ON_STARTUP:
-            try:
-                await self.force_refresh_all_users_keyboards()
-            except Exception as e:
-                logger.error(f"⚠️ Не удалось принудительно обновить клавиатуры, бот продолжит запуск: {e}")
+            asyncio.create_task(self.force_refresh_all_users_keyboards_after_delay())
+
+    async def force_refresh_all_users_keyboards_after_delay(self):
+        """Обновляет клавиатуры после старта polling, не блокируя запуск бота."""
+        if FORCE_REFRESH_STARTUP_DELAY_SECONDS > 0:
+            await asyncio.sleep(FORCE_REFRESH_STARTUP_DELAY_SECONDS)
+        try:
+            await self.force_refresh_all_users_keyboards()
+        except Exception as e:
+            logger.error(f"⚠️ Не удалось принудительно обновить клавиатуры: {e}")
 
     def get_api_base_url(self) -> str:
         """Нормализует базовый URL API с суффиксом /api."""
