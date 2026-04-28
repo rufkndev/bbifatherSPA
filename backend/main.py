@@ -7,6 +7,7 @@ import socket
 import zipfile
 import tempfile
 import time
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 import urllib.parse
@@ -70,12 +71,13 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_FORCE_IPV4 = os.getenv("TELEGRAM_FORCE_IPV4", "true").lower() == "true"
-TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "8"))
+TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "5"))
 TELEGRAM_READ_TIMEOUT = float(os.getenv("TELEGRAM_READ_TIMEOUT", "20"))
-TELEGRAM_SEND_RETRIES = max(1, int(os.getenv("TELEGRAM_SEND_RETRIES", "1")))
+TELEGRAM_SEND_RETRIES = max(1, int(os.getenv("TELEGRAM_SEND_RETRIES", "2")))
 TELEGRAM_ADMIN_NOTIFY_WORKERS = max(1, int(os.getenv("TELEGRAM_ADMIN_NOTIFY_WORKERS", "4")))
-TELEGRAM_FAILURE_COOLDOWN_SECONDS = max(0.0, float(os.getenv("TELEGRAM_FAILURE_COOLDOWN_SECONDS", "60")))
-TELEGRAM_UNAVAILABLE_UNTIL = 0.0
+TELEGRAM_ERROR_LOG_COOLDOWN_SECONDS = max(0.0, float(os.getenv("TELEGRAM_ERROR_LOG_COOLDOWN_SECONDS", "30")))
+TELEGRAM_SESSION_LOCAL = threading.local()
+TELEGRAM_LAST_ERROR_LOG_AT: Dict[str, float] = {}
 
 if TELEGRAM_FORCE_IPV4:
     _original_getaddrinfo = socket.getaddrinfo
@@ -183,15 +185,22 @@ def sanitize_telegram_error(error: Exception) -> str:
         message = message.replace(BOT_TOKEN, "***")
     return message
 
-def telegram_api_is_paused() -> bool:
-    """Проверяет, стоит ли временно пропустить Telegram API после сетевого timeout."""
-    return time.monotonic() < TELEGRAM_UNAVAILABLE_UNTIL
+def get_telegram_session() -> requests.Session:
+    """Переиспользует HTTP-соединение к Telegram в рамках текущего потока."""
+    session = getattr(TELEGRAM_SESSION_LOCAL, "session", None)
+    if session is None:
+        session = requests.Session()
+        TELEGRAM_SESSION_LOCAL.session = session
+    return session
 
-def pause_telegram_api():
-    """Ставит короткую паузу после сетевой ошибки, чтобы не забивать процесс одинаковыми запросами."""
-    global TELEGRAM_UNAVAILABLE_UNTIL
-    if TELEGRAM_FAILURE_COOLDOWN_SECONDS > 0:
-        TELEGRAM_UNAVAILABLE_UNTIL = time.monotonic() + TELEGRAM_FAILURE_COOLDOWN_SECONDS
+def should_log_telegram_error(method: str) -> bool:
+    """Не печатает одинаковые сетевые ошибки слишком часто."""
+    now = time.monotonic()
+    last_at = TELEGRAM_LAST_ERROR_LOG_AT.get(method, 0.0)
+    if now - last_at >= TELEGRAM_ERROR_LOG_COOLDOWN_SECONDS:
+        TELEGRAM_LAST_ERROR_LOG_AT[method] = now
+        return True
+    return False
 
 def post_telegram(
     method: str,
@@ -202,8 +211,6 @@ def post_telegram(
     """Отправляет запрос в Telegram API с retry для временных ошибок."""
     if not BOT_TOKEN:
         return None
-    if telegram_api_is_paused():
-        return None
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
     request_timeout = timeout if timeout is not None else (TELEGRAM_CONNECT_TIMEOUT, TELEGRAM_READ_TIMEOUT)
@@ -211,7 +218,7 @@ def post_telegram(
 
     for attempt in range(retries):
         try:
-            response = requests.post(url, json=payload, timeout=request_timeout)
+            response = get_telegram_session().post(url, json=payload, timeout=request_timeout)
             last_response = response
 
             # Успех
@@ -233,13 +240,10 @@ def post_telegram(
 
             return response
         except requests.RequestException as e:
-            pause_telegram_api()
-            print(
-                f"⚠️ Telegram API timeout на '{method}'. "
-                f"Пауза отправки уведомлений на {TELEGRAM_FAILURE_COOLDOWN_SECONDS:.0f} сек: {sanitize_telegram_error(e)}"
-            )
+            if should_log_telegram_error(method):
+                print(f"⚠️ Telegram API timeout на '{method}': {sanitize_telegram_error(e)}")
             if attempt < retries - 1:
-                time.sleep(0.5 * (attempt + 1))
+                time.sleep(min(2 * (attempt + 1), 10))
             else:
                 return last_response
 
