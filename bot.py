@@ -11,6 +11,7 @@ import requests
 import re
 import socket
 import urllib.parse
+import inspect
 from typing import Optional, List, Set
 
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, BotCommand
@@ -72,6 +73,9 @@ FORCE_REFRESH_STARTUP_DELAY_SECONDS = float(os.getenv("FORCE_REFRESH_STARTUP_DEL
 UPDATE_BOT_COMMANDS_ON_STARTUP = os.getenv("UPDATE_BOT_COMMANDS_ON_STARTUP", "false").lower() == "true"
 TELEGRAM_PROXY_URL = os.getenv("TELEGRAM_PROXY_URL", "").strip()
 TELEGRAM_FORCE_IPV4 = os.getenv("TELEGRAM_FORCE_IPV4", "true").lower() == "true"
+TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "30"))
+TELEGRAM_READ_TIMEOUT = float(os.getenv("TELEGRAM_READ_TIMEOUT", "30"))
+TELEGRAM_GET_UPDATES_READ_TIMEOUT = float(os.getenv("TELEGRAM_GET_UPDATES_READ_TIMEOUT", "60"))
 
 if TELEGRAM_FORCE_IPV4:
     _original_getaddrinfo = socket.getaddrinfo
@@ -89,18 +93,35 @@ if not BOT_TOKEN:
 class BBIFatherBot:
     def __init__(self):
         builder = Application.builder().token(BOT_TOKEN).post_init(self.on_post_init)
+        builder = builder.request(self.create_telegram_request(read_timeout=TELEGRAM_READ_TIMEOUT))
+        builder = builder.get_updates_request(self.create_telegram_request(read_timeout=TELEGRAM_GET_UPDATES_READ_TIMEOUT))
         if TELEGRAM_PROXY_URL:
-            builder = builder.request(self.create_telegram_request()).get_updates_request(self.create_telegram_request())
             logger.info("🌐 Telegram proxy включен для бота")
         self.app = builder.build()
         self.setup_handlers()
 
-    def create_telegram_request(self) -> HTTPXRequest:
-        """Создает Telegram HTTP client с proxy, совместимо с разными версиями PTB."""
-        try:
-            return HTTPXRequest(proxy_url=TELEGRAM_PROXY_URL)
-        except TypeError:
-            return HTTPXRequest(proxy=TELEGRAM_PROXY_URL)
+    def create_telegram_request(self, read_timeout: float) -> HTTPXRequest:
+        """Создает Telegram HTTP client с proxy/timeouts под установленную версию PTB."""
+        signature = inspect.signature(HTTPXRequest)
+        supported_params = signature.parameters
+        kwargs = {}
+
+        for name, value in {
+            "connect_timeout": TELEGRAM_CONNECT_TIMEOUT,
+            "read_timeout": read_timeout,
+            "write_timeout": TELEGRAM_READ_TIMEOUT,
+            "pool_timeout": TELEGRAM_CONNECT_TIMEOUT,
+        }.items():
+            if name in supported_params:
+                kwargs[name] = value
+
+        if TELEGRAM_PROXY_URL:
+            if "proxy_url" in supported_params:
+                kwargs["proxy_url"] = TELEGRAM_PROXY_URL
+            elif "proxy" in supported_params:
+                kwargs["proxy"] = TELEGRAM_PROXY_URL
+
+        return HTTPXRequest(**kwargs)
 
     async def on_post_init(self, application: Application):
         """Действия сразу после запуска приложения."""
@@ -558,7 +579,7 @@ class BBIFatherBot:
             self.app.run_polling(
                 drop_pending_updates=True,
                 bootstrap_retries=0,
-                timeout=30,
+                timeout=int(TELEGRAM_GET_UPDATES_READ_TIMEOUT),
                 close_loop=False,
                 stop_signals=None  # Для Windows
             )
