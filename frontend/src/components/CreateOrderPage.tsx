@@ -19,7 +19,6 @@ import {
   Paper,
   Divider,
   IconButton,
-  Badge,
   Switch
 } from '@mui/material';
 import {
@@ -27,19 +26,15 @@ import {
   ArrowForward,
   ShoppingCart,
   Assignment,
-  CheckCircle,
-  Add,
-  Remove
+  CheckCircle
 } from '@mui/icons-material';
 import { Subject } from '../types';
 import { getSubjects, createOrder } from '../api';
 import { 
   coursesData, 
-  subjectsData, 
   getSubjectById, 
   calculateFullCoursePrice, 
   calculateSelectedWorksPrice, 
-  SubjectData, 
   getCourseById, 
   getSubjectsByCourseAndSemester, 
   getSemesterName 

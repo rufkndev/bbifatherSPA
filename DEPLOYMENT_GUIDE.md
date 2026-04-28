@@ -707,4 +707,4 @@ pkill -f "python bot.py" && pkill -f "python backend/main.py"
 cd ../frontend
 npm run build
 sudo cp -r build/* /var/www/bbifather/
-sudo systemctl restart nginx
+sudo systemctl reload nginx

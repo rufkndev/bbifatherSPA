@@ -1,7 +1,13 @@
 import axios from 'axios';
 import { Order, Subject, CreateOrderRequest, OrderListResponse, Student } from './types';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://bbifather.ru/api';
+const normalizeApiBaseUrl = (rawUrl?: string): string => {
+  const fallbackUrl = 'https://bbifather.ru';
+  const cleanedUrl = (rawUrl || fallbackUrl).trim().replace(/\/+$/, '');
+  return cleanedUrl.endsWith('/api') ? cleanedUrl.slice(0, -4) : cleanedUrl;
+};
+
+const API_BASE_URL = normalizeApiBaseUrl(process.env.REACT_APP_API_BASE_URL);
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -18,11 +24,14 @@ export const getSubjects = async (): Promise<Subject[]> => {
 
 // Orders API
 export const getOrders = async (page: number = 1, limit: number = 10, telegram?: string | null): Promise<OrderListResponse> => {
-  let url = `/api/orders?page=${page}&limit=${limit}`;
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
   if (telegram) {
-    url += `&telegram=${telegram}`;
+    params.set('telegram', telegram);
   }
-  const response = await api.get(url);
+  const response = await api.get(`/api/orders?${params.toString()}`);
   return response.data;
 };
 

@@ -21,14 +21,11 @@ import {
 import {
   Add as AddIcon,
   CalendarToday,
-  AttachFile,
-  FileDownload,
-  Edit as EditIcon,
   Search as SearchIcon,
   Logout as LogoutIcon,
 } from '@mui/icons-material';
 import { Order, OrderStatus, OrderPaymentDetails } from '../types';
-import { getAllOrders, downloadFile, downloadAllFiles, sendFilesToTelegram, api, requestOrderRevision } from '../api';
+import { getAllOrders, downloadAllFiles, sendFilesToTelegram, api, requestOrderRevision } from '../api';
 import { format, differenceInDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useTelegramWebApp } from '../hooks/useTelegramWebApp';
@@ -48,6 +45,7 @@ const OrdersPage: React.FC = () => {
   const [downloadingFiles, setDownloadingFiles] = useState<Set<string>>(new Set());
   const [sendingToTelegram, setSendingToTelegram] = useState<Set<number>>(new Set());
   const [paymentNotifications, setPaymentNotifications] = useState<Set<number>>(new Set());
+  const [paymentSubmitting, setPaymentSubmitting] = useState<Set<number>>(new Set());
   
   const [searchParams, setSearchParams] = useSearchParams();
   const [currentUser, setCurrentUser] = useState<string | null>(null);
@@ -61,7 +59,7 @@ const OrdersPage: React.FC = () => {
   const [submittingRevision, setSubmittingRevision] = useState(false);
 
   // Telegram WebApp интеграция
-  const { user, isInTelegram, hapticFeedback, showAlert, showConfirm } = useTelegramWebApp();
+  const { user, isInTelegram, hapticFeedback, showAlert } = useTelegramWebApp();
 
   // 1. Эффект для определения текущего пользователя (с Telegram WebApp поддержкой)
   useEffect(() => {
@@ -160,22 +158,6 @@ const OrdersPage: React.FC = () => {
     setOrders([]);
   };
 
-  const handleDownloadFile = async (orderId: number, filename: string) => {
-    const downloadKey = `${orderId}-${filename}`;
-    setDownloadingFiles(prev => new Set(prev).add(downloadKey));
-    try {
-      await downloadFile(orderId, filename);
-    } catch (error) {
-      console.error('Ошибка скачивания файла:', error);
-    } finally {
-      setDownloadingFiles(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(downloadKey);
-        return newSet;
-      });
-    }
-  };
-
   const handleDownloadAllFiles = async (orderId: number) => {
     const downloadKey = `${orderId}-all`;
     setDownloadingFiles(prev => new Set(prev).add(downloadKey));
@@ -237,6 +219,10 @@ const OrdersPage: React.FC = () => {
   };
 
   const handlePaymentNotification = async (orderId: number) => {
+    if (paymentSubmitting.has(orderId) || paymentNotifications.has(orderId)) return;
+
+    setPaymentSubmitting(prev => new Set(prev).add(orderId));
+
     try {
       // Тактильная обратная связь
       hapticFeedback.impactLight();
@@ -257,7 +243,15 @@ const OrdersPage: React.FC = () => {
       if (isInTelegram) {
         hapticFeedback.error();
         showAlert('❌ Ошибка отправки уведомления. Попробуйте позже.');
+      } else {
+        alert('❌ Ошибка отправки уведомления. Попробуйте позже.');
       }
+    } finally {
+      setPaymentSubmitting(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
     }
   };
 
@@ -683,6 +677,7 @@ const OrdersPage: React.FC = () => {
                              size="small"
                              variant="contained"
                              color="success"
+                             disabled={paymentSubmitting.has(order.id!)}
                              onClick={() => handlePaymentNotification(order.id!)}
                              sx={{ 
                                fontWeight: 600,
@@ -690,7 +685,7 @@ const OrdersPage: React.FC = () => {
                                py: { xs: 1, sm: 0.5 },
                              }}
                            >
-                             ✅ Я оплатил
+                             {paymentSubmitting.has(order.id!) ? 'Отправляем...' : '✅ Я оплатил'}
                            </Button>
                          )}
                          {paymentNotifications.has(order.id!) && (

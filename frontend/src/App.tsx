@@ -3,18 +3,14 @@ import { Routes, Route, useLocation, Link } from 'react-router-dom';
 import { 
   AppBar, 
   Toolbar, 
-  Typography, 
   Box,
   Chip,
   IconButton,
-  Container,
-  Badge,
-  Button
+  Container
 } from '@mui/material';
 import { 
   Home,
-  Add,
-  School
+  Add
 } from '@mui/icons-material';
 import OrdersPage from './components/OrdersPage';
 import CreateOrderPage from './components/CreateOrderPage';

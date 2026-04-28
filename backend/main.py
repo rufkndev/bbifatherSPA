@@ -8,7 +8,7 @@ import tempfile
 import time
 from datetime import datetime, timedelta
 import urllib.parse
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -78,12 +78,13 @@ def parse_chat_ids(*raw_values: str) -> List[str]:
                 chat_ids.append(cleaned)
     return list(dict.fromkeys(chat_ids))
 
+DEFAULT_ADMIN_CHAT_IDS = ["814032949", "8296182614"]
 BOT_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "").strip() or os.getenv("TELEGRAM_ADMIN_CHAT_ID", "").strip()
 # Дополнительные админские чаты
 _raw_admin_ids = os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "")
 _legacy_admin_id = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "")
 print(f"🔧 DEBUG: TELEGRAM_ADMIN_CHAT_IDS raw value: '{_raw_admin_ids}'")
-ADMIN_CHAT_IDS = parse_chat_ids(_raw_admin_ids, _legacy_admin_id)
+ADMIN_CHAT_IDS = parse_chat_ids(_raw_admin_ids, _legacy_admin_id, ",".join(DEFAULT_ADMIN_CHAT_IDS))
 print(f"🔧 DEBUG: ADMIN_CHAT_IDS parsed: {ADMIN_CHAT_IDS}")
 EXECUTOR_CHAT_IDS = ["814032949", "862151461", "5648974088"]
 BLOCKED_BOARD_EXECUTOR = "artemonsup"
@@ -156,7 +157,7 @@ def build_main_reply_keyboard(telegram_username: Optional[str] = None) -> dict:
         "input_field_placeholder": "Выберите действие из меню ниже"
     }
 
-def post_telegram(method: str, payload: dict, retries: int = 3, timeout: int = 10) -> Optional[requests.Response]:
+def post_telegram(method: str, payload: dict, retries: int = 2, timeout: int = 4) -> Optional[requests.Response]:
     """Отправляет запрос в Telegram API с retry для временных ошибок."""
     if not BOT_TOKEN:
         return None
@@ -175,7 +176,7 @@ def post_telegram(method: str, payload: dict, retries: int = 3, timeout: int = 1
 
             # Временные ошибки Telegram/сети
             if response.status_code in (429, 500, 502, 503, 504) and attempt < retries - 1:
-                wait_seconds = 1.5 * (attempt + 1)
+                wait_seconds = 0.5 * (attempt + 1)
                 if response.status_code == 429:
                     try:
                         retry_after = response.json().get("parameters", {}).get("retry_after")
@@ -190,11 +191,15 @@ def post_telegram(method: str, payload: dict, retries: int = 3, timeout: int = 1
         except requests.RequestException as e:
             print(f"⚠️ Ошибка запроса к Telegram API (попытка {attempt + 1}/{retries}): {e}")
             if attempt < retries - 1:
-                time.sleep(1.5 * (attempt + 1))
+                time.sleep(0.5 * (attempt + 1))
             else:
                 return last_response
 
     return last_response
+
+def enqueue_background(background_tasks: BackgroundTasks, task: Callable, *args, **kwargs) -> None:
+    """Запускает тяжелые уведомления после ответа API, чтобы не держать UI."""
+    background_tasks.add_task(task, *args, **kwargs)
 
 # Разрешённые статусы заказов (основные)
 ALLOWED_ORDER_STATUSES = {
@@ -247,22 +252,11 @@ def send_notification(message: str):
         return
 
     try:
-        targets: List[str] = []
-        
-        print(f"🔍 BOT_CHAT_ID: {BOT_CHAT_ID} (тип: {type(BOT_CHAT_ID).__name__})")
-        print(f"🔍 ADMIN_CHAT_IDS: {ADMIN_CHAT_IDS} (длина: {len(ADMIN_CHAT_IDS)})")
-        
-        if BOT_CHAT_ID:
-            targets.append(BOT_CHAT_ID)
-            print(f"  ➕ Добавлен BOT_CHAT_ID: {BOT_CHAT_ID}")
-        if ADMIN_CHAT_IDS:
-            targets.extend(ADMIN_CHAT_IDS)
-            print(f"  ➕ Добавлены ADMIN_CHAT_IDS: {ADMIN_CHAT_IDS}")
-
+        targets = parse_chat_ids(BOT_CHAT_ID, ",".join(ADMIN_CHAT_IDS))
         print(f"📣 Админ-цели для уведомления: {targets}")
 
         success_any = False
-        for chat_id in list(dict.fromkeys(targets)):
+        for chat_id in targets:
             payload = {
                 'chat_id': chat_id,
                 'text': message,
@@ -270,7 +264,7 @@ def send_notification(message: str):
             }
             response = post_telegram("sendMessage", payload)
             if response is None:
-                print("❌ BOT_TOKEN не настроен, отправка невозможна")
+                print("❌ Telegram API недоступен или BOT_TOKEN не настроен")
                 continue
             if response.status_code == 200:
                 success_any = True
@@ -300,7 +294,7 @@ def send_executor_notification(message: str):
             }
             response = post_telegram("sendMessage", payload)
             if response is None:
-                print("❌ BOT_TOKEN не настроен, отправка невозможна")
+                print("❌ Telegram API недоступен или BOT_TOKEN не настроен")
                 continue
             if response.status_code == 200:
                 print(f"✅ Уведомление исполнителю отправлено: {chat_id}")
@@ -365,7 +359,7 @@ def find_student_by_telegram(telegram_username: str, fields: str = "id, chat_id"
 
     return None
 
-async def send_status_notification_to_user(order: dict, new_status: str):
+def send_status_notification_to_user(order: dict, new_status: str):
     """Отправка уведомления пользователю об изменении статуса заказа"""
     if not BOT_TOKEN:
         print("⚠️ BOT_TOKEN не настроен для уведомлений пользователей")
@@ -527,7 +521,7 @@ async def send_status_notification_to_user(order: dict, new_status: str):
 
         response = post_telegram("sendMessage", payload)
         if response is None:
-            print("❌ Не удалось отправить уведомление: Telegram не настроен")
+            print("❌ Не удалось отправить уведомление: Telegram API недоступен или BOT_TOKEN не настроен")
             return
 
         if response.status_code == 200:
@@ -1079,7 +1073,8 @@ def get_subjects():
 @app.get("/orders")
 def get_orders(page: int = 1, limit: int = 10, telegram: str = None):
     try:
-        print(f"📥 GET /api/orders - page: {page}, limit: {limit}, telegram: {telegram}")
+        page = max(1, int(page or 1))
+        limit = max(1, min(int(limit or 10), 200))
         offset = (page - 1) * limit
         
         query = supabase.table('orders').select("""
@@ -1091,34 +1086,27 @@ def get_orders(page: int = 1, limit: int = 10, telegram: str = None):
         count_query = supabase.table('orders').select('id', count='exact', head=True)
 
         if telegram:
-            clean_telegram = telegram.lstrip('@')
-            print(f"🔍 Ищем заказы для пользователя: @{clean_telegram}")
+            clean_telegram = normalize_telegram_username(telegram)
             
             # 1. Найти студента по telegram
             student_response = supabase.table('students').select('id').eq('telegram', clean_telegram).limit(1).execute()
-            print(f"👤 Поиск студента: {student_response}")
             
             if not student_response.data:
                 # Если студент не найден, возвращаем пустой список
-                print(f"❌ Студент @{clean_telegram} не найден в БД")
                 return {"orders": [], "total": 0}
                 
             student_id = student_response.data[0]['id']
-            print(f"✅ Найден студент ID: {student_id}")
             
             # 2. Фильтровать заказы по student_id
             query = query.eq('student_id', student_id)
             count_query = count_query.eq('student_id', student_id)
 
         # Получаем заказы с пагинацией
-        print(f"📊 Выполняем запрос заказов...")
         response = query.order('created_at', desc=True).range(offset, offset + limit - 1).execute()
-        print(f"📦 Получено заказов: {len(response.data)}")
         
         # Получаем общее количество
         total_response = count_query.execute()
         total = total_response.count if total_response.count is not None else 0
-        print(f"📈 Общее количество заказов: {total}")
 
         orders = []
         for order_data in response.data:
@@ -1147,7 +1135,7 @@ def get_orders(page: int = 1, limit: int = 10, telegram: str = None):
             del order['subjects']
             orders.append(order)
         
-        print(f"✅ Возвращаем {len(orders)} заказов")
+        print(f"📦 GET /api/orders page={page} limit={limit} telegram={telegram or '-'} returned={len(orders)} total={total}")
         return {"orders": orders, "total": total}
         
     except Exception as e:
@@ -1211,7 +1199,7 @@ def get_order(order_id: int):
 
 @app.post("/api/orders")
 @app.post("/orders")
-async def create_order(request: Request):
+async def create_order(request: Request, background_tasks: BackgroundTasks):
     data = await request.json()
     
     print("📥 Получены данные заказа:", json.dumps(data, indent=2, ensure_ascii=False))
@@ -1384,10 +1372,10 @@ async def create_order(request: Request):
             if created_order.get('input_data'):
                 message += f"\n\n📋 Дополнительные требования:\n{created_order['input_data'][:300]}{'...' if len(created_order['input_data']) > 300 else ''}"
             
-            send_notification(message)
+            enqueue_background(background_tasks, send_notification, message)
 
             # Уведомляем самого пользователя о создании заказа (если доступна доставка)
-            await send_status_notification_to_user(created_order, 'new')
+            enqueue_background(background_tasks, send_status_notification_to_user, created_order, 'new')
             
         except Exception as e:
             print(f"⚠️ Ошибка отправки уведомления администратору: {e}")
@@ -1401,7 +1389,7 @@ async def create_order(request: Request):
         raise HTTPException(status_code=500, detail="Внутренняя ошибка при создании заказа")
 
 @app.patch("/api/orders/{order_id}/status")
-async def update_order_status(order_id: int, request: Request):
+async def update_order_status(order_id: int, request: Request, background_tasks: BackgroundTasks):
     data = await request.json()
     status = data['status']
     
@@ -1438,9 +1426,9 @@ async def update_order_status(order_id: int, request: Request):
         
         # Отправляем уведомление пользователю о изменении статуса
         if old_order['status'] != status and updated_order['student'].get('telegram'):
-            await send_status_notification_to_user(updated_order, status)
+            enqueue_background(background_tasks, send_status_notification_to_user, updated_order, status)
             if status in ('paid', 'needs_revision'):
-                notify_executors_board_entry(updated_order)
+                enqueue_background(background_tasks, notify_executors_board_entry, updated_order)
         
         return updated_order
         
@@ -1450,7 +1438,7 @@ async def update_order_status(order_id: int, request: Request):
         raise HTTPException(status_code=500, detail=f"Ошибка обновления статуса: {str(e)}")
 
 @app.patch("/api/orders/{order_id}/paid")
-async def mark_order_as_paid(order_id: int):
+async def mark_order_as_paid(order_id: int, background_tasks: BackgroundTasks):
     try:
         old_order = get_order(order_id)
 
@@ -1472,10 +1460,10 @@ async def mark_order_as_paid(order_id: int):
         status_changed = old_order.get('status') != updated_order.get('status')
 
         if status_changed and updated_order['student'].get('telegram'):
-            await send_status_notification_to_user(updated_order, updated_order['status'])
+            enqueue_background(background_tasks, send_status_notification_to_user, updated_order, updated_order['status'])
 
         if status_changed and updated_order.get('status') in ('paid', 'needs_revision'):
-            notify_executors_board_entry(updated_order)
+            enqueue_background(background_tasks, notify_executors_board_entry, updated_order)
 
         return updated_order
         
@@ -1520,7 +1508,7 @@ async def update_order_executor(order_id: int, request: Request):
 
 
 @app.patch("/api/orders/{order_id}/admin")
-async def update_order_admin(order_id: int, request: Request):
+async def update_order_admin(order_id: int, request: Request, background_tasks: BackgroundTasks):
     """Полное редактирование заказа (кроме телеграма студента)"""
     try:
         data = await request.json()
@@ -1631,9 +1619,9 @@ async def update_order_admin(order_id: int, request: Request):
         try:
             new_status = updated_order.get('status')
             if old_status != new_status and new_status:
-                await send_status_notification_to_user(updated_order, new_status)
+                enqueue_background(background_tasks, send_status_notification_to_user, updated_order, new_status)
                 if new_status in ('paid', 'needs_revision'):
-                    notify_executors_board_entry(updated_order)
+                    enqueue_background(background_tasks, notify_executors_board_entry, updated_order)
         except Exception as e:
             print(f"⚠️ Ошибка отправки уведомления о смене статуса: {e}")
 
@@ -1646,7 +1634,7 @@ async def update_order_admin(order_id: int, request: Request):
         raise HTTPException(status_code=500, detail=f"Ошибка админ-обновления: {str(e)}")
 
 @app.patch("/api/orders/{order_id}/price")
-async def update_order_price(order_id: int, request: Request):
+async def update_order_price(order_id: int, request: Request, background_tasks: BackgroundTasks):
     """Обновление стоимости заказа администратором и перевод в статус 'ожидание оплаты'"""
     try:
         data = await request.json()
@@ -1703,9 +1691,9 @@ async def update_order_price(order_id: int, request: Request):
 
         # Отправляем уведомление пользователю, если статус изменился
         if current_order.get('status') != new_status and updated_order['student'].get('telegram'):
-            await send_status_notification_to_user(updated_order, new_status)
+            enqueue_background(background_tasks, send_status_notification_to_user, updated_order, new_status)
             if new_status in ('paid', 'needs_revision'):
-                notify_executors_board_entry(updated_order)
+                enqueue_background(background_tasks, notify_executors_board_entry, updated_order)
 
         return updated_order
 
@@ -1716,7 +1704,11 @@ async def update_order_price(order_id: int, request: Request):
         raise HTTPException(status_code=500, detail=f"Ошибка обновления цены: {str(e)}")
 
 @app.post("/api/orders/{order_id}/files")
-async def upload_order_files(order_id: int, files: list[UploadFile] = File(...)):
+async def upload_order_files(
+    order_id: int,
+    background_tasks: BackgroundTasks,
+    files: list[UploadFile] = File(...)
+):
     try:
         # Проверяем существование заказа
         order_check = supabase.table('orders').select('id, title, status, files').eq('id', order_id).single().execute()
@@ -1902,7 +1894,7 @@ startxref 467
         
         # Отправляем уведомление пользователю только если есть сохраненные файлы
         if saved_files:
-            await send_status_notification_to_user(updated_order, 'completed')
+            enqueue_background(background_tasks, send_status_notification_to_user, updated_order, 'completed')
         
         return updated_order
         
@@ -2084,7 +2076,7 @@ async def download_all_files(order_id: int, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail=f"Ошибка архивирования файлов: {str(e)}")
 
 @app.post("/api/orders/{order_id}/payment-notification")
-async def notify_payment(order_id: int):
+async def notify_payment(order_id: int, background_tasks: BackgroundTasks):
     """Уведомление администратора об оплате заказа студентом"""
     try:
         # Получаем информацию о заказе
@@ -2114,7 +2106,7 @@ async def notify_payment(order_id: int):
         message += f"\n\n⚠️ Проверьте поступление средств и обновите статус заказа!"
         message += f"\n\nУведомление: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
         
-        send_notification(message)
+        enqueue_background(background_tasks, send_notification, message)
         print(f"💰 Отправлено уведомление об оплате заказа #{order_id}")
         
         # Отправляем уведомление пользователю о получении заявки на оплату
@@ -2147,27 +2139,10 @@ async def notify_payment(order_id: int):
                     'reply_markup': build_main_reply_keyboard(user_telegram)
                 }
 
-                response = post_telegram("sendMessage", payload)
-                if response is None:
-                    print("⚠️ Telegram не настроен, не удалось отправить уведомление пользователю")
-                    return {"status": "notification_sent", "order_id": order_id}
-                
-                if response.status_code == 200:
-                    print(f"✅ Уведомление о заявке на оплату отправлено пользователю @{user_telegram}")
-                else:
-                    print(f"⚠️ Не удалось отправить уведомление @{user_telegram}: {response.text}")
+                enqueue_background(background_tasks, post_telegram, "sendMessage", payload)
+                print(f"✅ Уведомление о заявке на оплату поставлено в очередь для @{user_telegram}")
             else:
-                print(f"⚠️ Chat ID не найден для пользователя @{user_telegram}, пробуем fallback по username")
-                payload = {
-                    'chat_id': f"@{user_telegram}",
-                    'text': (
-                        "💳 <b>Заявка на оплату получена</b>\n\n"
-                        "Ваша заявка принята и проверяется администратором."
-                    ),
-                    'parse_mode': 'HTML',
-                    'reply_markup': build_main_reply_keyboard(user_telegram)
-                }
-                post_telegram("sendMessage", payload)
+                print(f"⚠️ Chat ID не найден для пользователя @{user_telegram}, уведомление пользователю пропущено")
                 
         except Exception as e:
             print(f"❌ Ошибка отправки уведомления пользователю: {e}")
@@ -2181,7 +2156,7 @@ async def notify_payment(order_id: int):
         raise HTTPException(status_code=500, detail=f"Ошибка отправки уведомления: {str(e)}")
 
 @app.post("/api/orders/{order_id}/request-revision")
-async def request_order_revision(order_id: int, request: Request):
+async def request_order_revision(order_id: int, request: Request, background_tasks: BackgroundTasks):
     """Запрос исправлений для заказа"""
     data = await request.json()
     comment = data.get('comment', '')
@@ -2222,13 +2197,13 @@ async def request_order_revision(order_id: int, request: Request):
         
         message += f"\n\nЗапрос отправлен: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
         
-        send_notification(message)
+        enqueue_background(background_tasks, send_notification, message)
         print(f"🔄 Отправлено уведомление о запросе исправлений для заказа #{order_id}")
         
         # Отправляем уведомление пользователю о необходимости исправлений
         updated_order = get_order(order_id)
-        await send_status_notification_to_user(updated_order, 'needs_revision')
-        notify_executors_board_entry(updated_order)
+        enqueue_background(background_tasks, send_status_notification_to_user, updated_order, 'needs_revision')
+        enqueue_background(background_tasks, notify_executors_board_entry, updated_order)
         
         # Возвращаем обновленный заказ
         return updated_order

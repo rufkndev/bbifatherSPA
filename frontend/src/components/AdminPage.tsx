@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import AdminLogin from './AdminLogin';
 import {
   Box,
@@ -25,20 +25,13 @@ import {
   Select,
   MenuItem,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Pagination
 } from '@mui/material';
 import { Order, OrderStatus, PaymentMethod } from '../types';
-import { getAllOrders, updateOrderAdmin, markOrderAsPaid, uploadOrderFiles } from '../api';
+import { getOrders, updateOrderAdmin, markOrderAsPaid, uploadOrderFiles } from '../api';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
-
-const statusColors = {
-  [OrderStatus.NEW]: 'default',
-  [OrderStatus.WAITING_PAYMENT]: 'warning',
-  [OrderStatus.PAID]: 'info',
-  [OrderStatus.IN_PROGRESS]: 'secondary',
-  [OrderStatus.COMPLETED]: 'success',
-} as const;
 
 const statusLabels: Partial<Record<OrderStatus, string>> = {
   [OrderStatus.NEW]: 'Новый',
@@ -84,6 +77,9 @@ const AdminPage: React.FC = () => {
     localStorage.getItem('adminAuth') === 'true'
   );
   const [orders, setOrders] = useState<Order[]>([]);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -102,11 +98,25 @@ const AdminPage: React.FC = () => {
   const [studentGroupInput, setStudentGroupInput] = useState<string>('');
   const [paymentMethodInput, setPaymentMethodInput] = useState<PaymentMethod>('sberbank');
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      loadOrders();
+  const loadOrders = useCallback(async () => {
+    if (!isAuthenticated) return;
+
+    try {
+      setLoading(true);
+      const response = await getOrders(page, rowsPerPage);
+      setOrders(response.orders);
+      setTotalOrders(response.total || 0);
+    } catch (error) {
+      console.error('Ошибка загрузки заказов:', error);
+      setError('Не удалось загрузить заказы');
+    } finally {
+      setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, page, rowsPerPage]);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
 
   const handleLogin = () => {
     setIsAuthenticated(true);
@@ -116,18 +126,7 @@ const AdminPage: React.FC = () => {
     return <AdminLogin onLogin={handleLogin} />;
   }
 
-  const loadOrders = async () => {
-    try {
-      setLoading(true);
-      const allOrders = await getAllOrders(); // Загружаем все заказы без лимита 100
-      setOrders(allOrders);
-    } catch (error) {
-      console.error('Ошибка загрузки заказов:', error);
-      setError('Не удалось загрузить заказы');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const pageCount = Math.max(1, Math.ceil(totalOrders / rowsPerPage));
 
   const getDefaultPayout = (order: Order) => {
     const base = order.actual_price ?? order.subject?.price ?? 0;
@@ -152,10 +151,6 @@ const AdminPage: React.FC = () => {
     setStudentNameInput(order.student?.name || '');
     setStudentGroupInput(order.student?.group || '');
     setPaymentMethodInput(order.payment_method || 'sberbank');
-  };
-
-  const handleStatusUpdate = async () => {
-    await handleSaveAdmin();
   };
 
   const handleSaveAdmin = async (statusOverride?: OrderStatus) => {
@@ -351,7 +346,7 @@ const AdminPage: React.FC = () => {
           >
             <CardContent sx={{ textAlign: 'center', py: 3, px: 2 }}>
               <Typography variant="h3" sx={{ fontWeight: 700, color: '#2563eb', mb: 1 }}>
-                {orders.length}
+                {totalOrders}
               </Typography>
               <Typography variant="h6" sx={{ color: 'grey.700', fontWeight: 600 }}>
                 Всего заказов
@@ -383,7 +378,7 @@ const AdminPage: React.FC = () => {
                 {orders.filter(o => o.status === OrderStatus.COMPLETED).length}
               </Typography>
               <Typography variant="h6" sx={{ color: 'grey.700', fontWeight: 600 }}>
-                Выполнено
+                Выполнено на странице
               </Typography>
             </CardContent>
           </Card>
@@ -412,7 +407,7 @@ const AdminPage: React.FC = () => {
                 {orders.filter(o => o.status === OrderStatus.IN_PROGRESS).length}
               </Typography>
               <Typography variant="h6" sx={{ color: 'grey.700', fontWeight: 600 }}>
-                В работе
+                В работе на странице
               </Typography>
             </CardContent>
           </Card>
@@ -436,10 +431,13 @@ const AdminPage: React.FC = () => {
               color: 'grey.800',
             }}
           >
-            Все заказы ({orders.length})
+            Все заказы ({totalOrders})
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Показаны {orders.length} заказов на странице {page} из {pageCount}
           </Typography>
 
-          {/* Статистика по статусам */}
+          {/* Статистика по статусам текущей страницы */}
           <Grid container spacing={2} sx={{ mb: 3 }}>
             {allowedStatuses.map((status) => (
               <Grid item xs={12} sm={6} md={3} lg={2} key={status}>
@@ -592,6 +590,40 @@ const AdminPage: React.FC = () => {
               </TableBody>
             </Table>
           </TableContainer>
+          <Box
+            sx={{
+              mt: 3,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 2,
+              flexWrap: 'wrap',
+            }}
+          >
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <InputLabel>На странице</InputLabel>
+              <Select
+                value={String(rowsPerPage)}
+                label="На странице"
+                onChange={(e) => {
+                  setRowsPerPage(Number(e.target.value));
+                  setPage(1);
+                }}
+              >
+                {[25, 50, 100].map((value) => (
+                  <MenuItem key={value} value={String(value)}>
+                    {value}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Pagination
+              count={pageCount}
+              page={page}
+              color="primary"
+              onChange={(_, value) => setPage(value)}
+            />
+          </Box>
         </CardContent>
       </Card>
 

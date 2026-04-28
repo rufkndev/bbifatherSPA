@@ -8,10 +8,11 @@ import os
 import asyncio
 import logging
 import requests
+import re
 import urllib.parse
 from typing import Optional, List, Set
 
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv
 
@@ -34,8 +35,22 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 # Константы для бота (только то что нужно боту)
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 ADMIN_CHAT_ID = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "")  # ID администратора для тех поддержки
+
+def parse_chat_ids(*raw_values: str) -> List[str]:
+    chat_ids: List[str] = []
+    for raw_value in raw_values:
+        for chat_id in re.split(r"[\s,;]+", raw_value or ""):
+            cleaned = chat_id.strip()
+            if cleaned:
+                chat_ids.append(cleaned)
+    return list(dict.fromkeys(chat_ids))
+
 # Поддержка нескольких администраторов через список chat_id (через запятую)
-ADMIN_CHAT_IDS: List[str] = [cid.strip() for cid in os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "").split(",") if cid.strip()]
+ADMIN_CHAT_IDS: List[str] = parse_chat_ids(
+    os.getenv("TELEGRAM_ADMIN_CHAT_IDS", ""),
+    ADMIN_CHAT_ID,
+    "814032949,8296182614"
+)
 # Поддержка списка админов по username (для авто-обнаружения chat_id при первом сообщении боту)
 ADMIN_USERNAMES: List[str] = [u.strip().lstrip('@').lower() for u in os.getenv("TELEGRAM_ADMIN_USERNAMES", "artemonnnnnnn,artemonsup").split(",") if u.strip()]
 # Динамически собранные chat_id админов, которые писали боту
@@ -44,7 +59,7 @@ ADMIN_DYNAMIC_CHAT_IDS: Set[str] = set()
 SUPPORT_USERNAME = os.getenv("TELEGRAM_SUPPORT_USERNAME", "artemonsup")
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://bbifather.ru")
 API_BASE_URL = os.getenv("API_BASE_URL", "https://bbifather.ru/api")  # URL для API запросов
-FORCE_REFRESH_BOT_USERS_ON_STARTUP = os.getenv("FORCE_REFRESH_BOT_USERS_ON_STARTUP", "false").lower() == "true"
+FORCE_REFRESH_BOT_USERS_ON_STARTUP = os.getenv("FORCE_REFRESH_BOT_USERS_ON_STARTUP", "true").lower() == "true"
 
 if not BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN не задан в .env файле!")
@@ -56,6 +71,15 @@ class BBIFatherBot:
 
     async def on_post_init(self, application: Application):
         """Действия сразу после запуска приложения."""
+        await application.bot.set_my_commands([
+            BotCommand("start", "Открыть главное меню"),
+            BotCommand("help", "Как пользоваться сервисом"),
+            BotCommand("rules", "Правила сервиса"),
+            BotCommand("support", "Связаться с поддержкой"),
+            BotCommand("id", "Показать ваш Telegram ID"),
+        ])
+        logger.info("✅ Команды Telegram-бота обновлены")
+
         if FORCE_REFRESH_BOT_USERS_ON_STARTUP:
             await self.force_refresh_all_users_keyboards()
 
