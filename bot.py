@@ -9,11 +9,13 @@ import asyncio
 import logging
 import requests
 import re
+import socket
 import urllib.parse
 from typing import Optional, List, Set
 
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.request import HTTPXRequest
 from dotenv import load_dotenv
 
 # Загружаем переменные окружения
@@ -65,30 +67,57 @@ API_BASE_URL = (
     or os.getenv("INTERNAL_API_BASE_URL")
     or "http://127.0.0.1:8000/api"
 )
-FORCE_REFRESH_BOT_USERS_ON_STARTUP = os.getenv("FORCE_REFRESH_BOT_USERS_ON_STARTUP", "true").lower() == "true"
+FORCE_REFRESH_BOT_USERS_ON_STARTUP = os.getenv("FORCE_REFRESH_BOT_USERS_ON_STARTUP", "false").lower() == "true"
 FORCE_REFRESH_STARTUP_DELAY_SECONDS = float(os.getenv("FORCE_REFRESH_STARTUP_DELAY_SECONDS", "3"))
+UPDATE_BOT_COMMANDS_ON_STARTUP = os.getenv("UPDATE_BOT_COMMANDS_ON_STARTUP", "false").lower() == "true"
+TELEGRAM_PROXY_URL = os.getenv("TELEGRAM_PROXY_URL", "").strip()
+TELEGRAM_FORCE_IPV4 = os.getenv("TELEGRAM_FORCE_IPV4", "true").lower() == "true"
+
+if TELEGRAM_FORCE_IPV4:
+    _original_getaddrinfo = socket.getaddrinfo
+
+    def _telegram_ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+        if host == "api.telegram.org":
+            family = socket.AF_INET
+        return _original_getaddrinfo(host, port, family, type, proto, flags)
+
+    socket.getaddrinfo = _telegram_ipv4_getaddrinfo
 
 if not BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN не задан в .env файле!")
 
 class BBIFatherBot:
     def __init__(self):
-        self.app = Application.builder().token(BOT_TOKEN).post_init(self.on_post_init).build()
+        builder = Application.builder().token(BOT_TOKEN).post_init(self.on_post_init)
+        if TELEGRAM_PROXY_URL:
+            builder = builder.request(self.create_telegram_request()).get_updates_request(self.create_telegram_request())
+            logger.info("🌐 Telegram proxy включен для бота")
+        self.app = builder.build()
         self.setup_handlers()
+
+    def create_telegram_request(self) -> HTTPXRequest:
+        """Создает Telegram HTTP client с proxy, совместимо с разными версиями PTB."""
+        try:
+            return HTTPXRequest(proxy_url=TELEGRAM_PROXY_URL)
+        except TypeError:
+            return HTTPXRequest(proxy=TELEGRAM_PROXY_URL)
 
     async def on_post_init(self, application: Application):
         """Действия сразу после запуска приложения."""
-        try:
-            await application.bot.set_my_commands([
-                BotCommand("start", "Открыть главное меню"),
-                BotCommand("help", "Как пользоваться сервисом"),
-                BotCommand("rules", "Правила сервиса"),
-                BotCommand("support", "Связаться с поддержкой"),
-                BotCommand("id", "Показать ваш Telegram ID"),
-            ])
-            logger.info("✅ Команды Telegram-бота обновлены")
-        except Exception as e:
-            logger.error(f"⚠️ Не удалось обновить команды Telegram, бот продолжит запуск: {e}")
+        if UPDATE_BOT_COMMANDS_ON_STARTUP:
+            try:
+                await application.bot.set_my_commands([
+                    BotCommand("start", "Открыть главное меню"),
+                    BotCommand("help", "Как пользоваться сервисом"),
+                    BotCommand("rules", "Правила сервиса"),
+                    BotCommand("support", "Связаться с поддержкой"),
+                    BotCommand("id", "Показать ваш Telegram ID"),
+                ])
+                logger.info("✅ Команды Telegram-бота обновлены")
+            except Exception as e:
+                logger.error(f"⚠️ Не удалось обновить команды Telegram, бот продолжит запуск: {e}")
+        else:
+            logger.info("ℹ️ Обновление команд Telegram при старте отключено")
 
         if FORCE_REFRESH_BOT_USERS_ON_STARTUP:
             asyncio.create_task(self.force_refresh_all_users_keyboards_after_delay())
@@ -528,7 +557,7 @@ class BBIFatherBot:
             # Запускаем polling с правильными настройками
             self.app.run_polling(
                 drop_pending_updates=True,
-                bootstrap_retries=-1,
+                bootstrap_retries=0,
                 timeout=30,
                 close_loop=False,
                 stop_signals=None  # Для Windows

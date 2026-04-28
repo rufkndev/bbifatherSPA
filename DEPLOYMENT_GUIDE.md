@@ -703,7 +703,7 @@ df -h
 
 
 python backend/main.py & python bot.py & wait
-kill -f "python bot.py" && pkill -f "python backend/main.py"
+pkill -f "python bot.py" && pkill -f "python backend/main.py"
 
 # Обновляем frontend
 cd ../frontend

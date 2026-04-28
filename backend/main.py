@@ -3,6 +3,7 @@ import html
 import os
 import re
 import shutil
+import socket
 import zipfile
 import tempfile
 import time
@@ -67,6 +68,18 @@ app.add_middleware(
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_PROXY_URL = os.getenv("TELEGRAM_PROXY_URL", "").strip()
+TELEGRAM_FORCE_IPV4 = os.getenv("TELEGRAM_FORCE_IPV4", "true").lower() == "true"
+
+if TELEGRAM_FORCE_IPV4:
+    _original_getaddrinfo = socket.getaddrinfo
+
+    def _telegram_ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+        if host == "api.telegram.org":
+            family = socket.AF_INET
+        return _original_getaddrinfo(host, port, family, type, proto, flags)
+
+    socket.getaddrinfo = _telegram_ipv4_getaddrinfo
 
 def parse_chat_ids(*raw_values: str) -> List[str]:
     """Парсит chat_id из env: поддерживает запятые, точки с запятой и пробелы."""
@@ -163,11 +176,12 @@ def post_telegram(method: str, payload: dict, retries: int = 2, timeout: int = 4
         return None
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
+    proxies = {"http": TELEGRAM_PROXY_URL, "https": TELEGRAM_PROXY_URL} if TELEGRAM_PROXY_URL else None
     last_response = None
 
     for attempt in range(retries):
         try:
-            response = requests.post(url, json=payload, timeout=timeout)
+            response = requests.post(url, json=payload, timeout=timeout, proxies=proxies)
             last_response = response
 
             # Успех
