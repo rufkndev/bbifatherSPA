@@ -10,6 +10,7 @@ import logging
 import requests
 import re
 import socket
+import time
 import urllib.parse
 import inspect
 from typing import Optional, List, Set
@@ -68,7 +69,7 @@ API_BASE_URL = (
     or os.getenv("INTERNAL_API_BASE_URL")
     or "http://127.0.0.1:8000/api"
 )
-FORCE_REFRESH_BOT_USERS_ON_STARTUP = os.getenv("FORCE_REFRESH_BOT_USERS_ON_STARTUP", "false").lower() == "true"
+FORCE_REFRESH_BOT_USERS_ON_STARTUP = os.getenv("FORCE_REFRESH_BOT_USERS_ON_STARTUP", "true").lower() == "true"
 FORCE_REFRESH_STARTUP_DELAY_SECONDS = float(os.getenv("FORCE_REFRESH_STARTUP_DELAY_SECONDS", "3"))
 UPDATE_BOT_COMMANDS_ON_STARTUP = os.getenv("UPDATE_BOT_COMMANDS_ON_STARTUP", "false").lower() == "true"
 TELEGRAM_PROXY_URL = os.getenv("TELEGRAM_PROXY_URL", "").strip()
@@ -76,6 +77,8 @@ TELEGRAM_FORCE_IPV4 = os.getenv("TELEGRAM_FORCE_IPV4", "true").lower() == "true"
 TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "30"))
 TELEGRAM_READ_TIMEOUT = float(os.getenv("TELEGRAM_READ_TIMEOUT", "30"))
 TELEGRAM_GET_UPDATES_READ_TIMEOUT = float(os.getenv("TELEGRAM_GET_UPDATES_READ_TIMEOUT", "60"))
+BOT_START_MAX_RETRIES = max(1, int(os.getenv("BOT_START_MAX_RETRIES", "8")))
+BOT_START_RETRY_DELAY_SECONDS = max(1.0, float(os.getenv("BOT_START_RETRY_DELAY_SECONDS", "5")))
 
 if TELEGRAM_FORCE_IPV4:
     _original_getaddrinfo = socket.getaddrinfo
@@ -90,12 +93,40 @@ if TELEGRAM_FORCE_IPV4:
 if not BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN не задан в .env файле!")
 
+def normalize_proxy_url(raw_proxy: str) -> str:
+    """Проверяет и нормализует URL прокси; при ошибке возвращает пустую строку."""
+    value = (raw_proxy or "").strip()
+    if not value:
+        return ""
+
+    lowered = value.lower()
+    if "user:pass@" in lowered or lowered.endswith(":port") or "host:port" in lowered:
+        logger.warning("⚠️ TELEGRAM_PROXY_URL похож на шаблон. Прокси отключен.")
+        return ""
+
+    try:
+        parsed = urllib.parse.urlparse(value)
+        if not parsed.scheme or not parsed.hostname or parsed.port is None:
+            logger.warning("⚠️ TELEGRAM_PROXY_URL некорректен. Прокси отключен.")
+            return ""
+    except Exception:
+        logger.warning("⚠️ TELEGRAM_PROXY_URL не удалось распарсить. Прокси отключен.")
+        return ""
+
+    return value
+
+VALID_TELEGRAM_PROXY_URL = normalize_proxy_url(TELEGRAM_PROXY_URL)
+
 class BBIFatherBot:
     def __init__(self):
+        self.app: Optional[Application] = None
+        self._is_running = False
+
+    def build_application(self):
         builder = Application.builder().token(BOT_TOKEN).post_init(self.on_post_init)
         builder = builder.request(self.create_telegram_request(read_timeout=TELEGRAM_READ_TIMEOUT))
         builder = builder.get_updates_request(self.create_telegram_request(read_timeout=TELEGRAM_GET_UPDATES_READ_TIMEOUT))
-        if TELEGRAM_PROXY_URL:
+        if VALID_TELEGRAM_PROXY_URL:
             logger.info("🌐 Telegram proxy включен для бота")
         self.app = builder.build()
         self.setup_handlers()
@@ -115,11 +146,11 @@ class BBIFatherBot:
             if name in supported_params:
                 kwargs[name] = value
 
-        if TELEGRAM_PROXY_URL:
+        if VALID_TELEGRAM_PROXY_URL:
             if "proxy_url" in supported_params:
-                kwargs["proxy_url"] = TELEGRAM_PROXY_URL
+                kwargs["proxy_url"] = VALID_TELEGRAM_PROXY_URL
             elif "proxy" in supported_params:
-                kwargs["proxy"] = TELEGRAM_PROXY_URL
+                kwargs["proxy"] = VALID_TELEGRAM_PROXY_URL
 
         return HTTPXRequest(**kwargs)
 
@@ -203,6 +234,8 @@ class BBIFatherBot:
 
     def setup_handlers(self):
         """Настройка обработчиков команд и сообщений"""
+        if not self.app:
+            return
         # Команды
         self.app.add_handler(CommandHandler("start", self.start_command))
         self.app.add_handler(CommandHandler("help", self.help_command))
@@ -573,21 +606,34 @@ class BBIFatherBot:
     def run(self):
         """Запуск бота"""
         logger.info("🤖 Запуск BBI Father Telegram Bot...")
-        
-        try:
-            # Запускаем polling с правильными настройками
-            self.app.run_polling(
-                drop_pending_updates=False,
-                bootstrap_retries=3,
-                timeout=int(TELEGRAM_GET_UPDATES_READ_TIMEOUT),
-                close_loop=False,
-                stop_signals=None  # Для Windows
-            )
-        except KeyboardInterrupt:
-            logger.info("👋 Бот остановлен пользователем")
-        except Exception as e:
-            logger.error(f"❌ Ошибка при запуске: {e}")
-            raise
+        attempt = 0
+
+        while attempt < BOT_START_MAX_RETRIES:
+            attempt += 1
+            try:
+                self.build_application()
+                self._is_running = True
+                logger.info(f"🚀 Старт polling: попытка {attempt}/{BOT_START_MAX_RETRIES}")
+                self.app.run_polling(
+                    drop_pending_updates=False,
+                    bootstrap_retries=0,
+                    timeout=int(TELEGRAM_GET_UPDATES_READ_TIMEOUT),
+                    close_loop=False,
+                    stop_signals=None  # Для Windows
+                )
+                return
+            except KeyboardInterrupt:
+                logger.info("👋 Бот остановлен пользователем")
+                return
+            except Exception as e:
+                logger.error(f"❌ Ошибка старта бота (попытка {attempt}/{BOT_START_MAX_RETRIES}): {e}")
+                if attempt >= BOT_START_MAX_RETRIES:
+                    raise
+                sleep_for = min(BOT_START_RETRY_DELAY_SECONDS * attempt, 30)
+                logger.info(f"⏳ Повторный старт через {sleep_for:.0f} сек...")
+                time.sleep(sleep_for)
+            finally:
+                self._is_running = False
 
 
 def main():

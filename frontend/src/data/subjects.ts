@@ -281,7 +281,7 @@ export const subjectsData: SubjectData[] = [
   {
     id: "scm-logistics",
     name: "Логистические системы и управление цепочками поставок (SCM)",
-    description: "ПР №1-4, ЛР №1-3, ИКР",
+    description: "ПР №1-6, ЛР №1-3, ИКР",
     basePrice: 1250,
     course: 3,
     semester: 6,
@@ -324,7 +324,7 @@ export const subjectsData: SubjectData[] = [
   {
     id: "hr-crm-srm",
     name: "Управление человеческими ресурсами (HR), взаимоотношениями с клиентами(CRM) и поставщиками(SRM)",
-    description: "CRM №1-2, HRM, SRM, ECM, ИКР, Реферат, Обзор рынка",
+    description: "CRM №1-2, HRM, SRM(Временно не работает), ECM, ИКР, Реферат, Обзор рынка",
     basePrice: 2000,
     course: 3,
     semester: 6,
@@ -343,7 +343,7 @@ export const subjectsData: SubjectData[] = [
   {
     id: "aps-mes-systems",
     name: "Системы планирования и управления основным производством (APS/ MES)",
-    description: "Реферат, ПР №1-5",
+    description: "Реферат, ПР №1-5 (временно недоступна лицензия)",
     basePrice: 2000,
     course: 3,
     semester: 6,
@@ -360,7 +360,7 @@ export const subjectsData: SubjectData[] = [
   {
     id: "business-performance-systems",
     name: "Системы управления эффективностью, качеством и стратегией развития бизнеса",
-    description: "ПР №1-5, Реферат, ИКР",
+    description: "ПР №1-5, Реферат, ИКР, НИР",
     basePrice: 1250,
     course: 3,
     semester: 6,
@@ -379,7 +379,7 @@ export const subjectsData: SubjectData[] = [
   {
     id: "bigdata-systems-design",
     name: "Проектирование систем обработки больших данных",
-    description: "ПР №1-3, Групповой проект",
+    description: "ПР №1-4, Групповой проект",
     basePrice: 1500,
     course: 3,
     semester: 6,

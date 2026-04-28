@@ -1,5 +1,5 @@
 // Service Worker для принудительного обновления мини-аппа
-const CACHE_NAME = 'bbifather-miniapp-cache-v2';
+const CACHE_NAME = 'bbifather-miniapp-cache-v3';
 
 const notifyClientsToReload = async () => {
   const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
