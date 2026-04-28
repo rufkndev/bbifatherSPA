@@ -70,14 +70,16 @@ API_BASE_URL = (
     or os.getenv("INTERNAL_API_BASE_URL")
     or "http://127.0.0.1:8000/api"
 )
-FORCE_REFRESH_BOT_USERS_ON_STARTUP = os.getenv("FORCE_REFRESH_BOT_USERS_ON_STARTUP", "true").lower() == "true"
+# Массовое обновление клавиатур было одноразовой миграцией. Не запускаем его при старте,
+# даже если старая переменная осталась в .env.
+FORCE_REFRESH_BOT_USERS_ON_STARTUP = False
 FORCE_REFRESH_STARTUP_DELAY_SECONDS = float(os.getenv("FORCE_REFRESH_STARTUP_DELAY_SECONDS", "3"))
 UPDATE_BOT_COMMANDS_ON_STARTUP = os.getenv("UPDATE_BOT_COMMANDS_ON_STARTUP", "false").lower() == "true"
 TELEGRAM_FORCE_IPV4 = os.getenv("TELEGRAM_FORCE_IPV4", "true").lower() == "true"
-TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "60"))
+TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "8"))
 TELEGRAM_READ_TIMEOUT = float(os.getenv("TELEGRAM_READ_TIMEOUT", "60"))
 TELEGRAM_GET_UPDATES_READ_TIMEOUT = float(os.getenv("TELEGRAM_GET_UPDATES_READ_TIMEOUT", "60"))
-TELEGRAM_SEND_RETRIES = max(1, int(os.getenv("TELEGRAM_SEND_RETRIES", "2")))
+TELEGRAM_SEND_RETRIES = max(1, int(os.getenv("TELEGRAM_SEND_RETRIES", "1")))
 TELEGRAM_SEND_RETRY_DELAY_SECONDS = max(0.5, float(os.getenv("TELEGRAM_SEND_RETRY_DELAY_SECONDS", "2")))
 BACKEND_FAILURE_COOLDOWN_SECONDS = max(0.0, float(os.getenv("BACKEND_FAILURE_COOLDOWN_SECONDS", "60")))
 BOT_START_MAX_RETRIES = max(1, int(os.getenv("BOT_START_MAX_RETRIES", "8")))
@@ -221,6 +223,9 @@ class BBIFatherBot:
         for attempt in range(1, TELEGRAM_SEND_RETRIES + 1):
             try:
                 await message.reply_text(text, **kwargs)
+                chat = update.effective_chat
+                chat_id = chat.id if chat else "unknown"
+                logger.info(f"✅ Ответ Telegram отправлен в chat_id {chat_id}")
                 return True
             except (TimedOut, NetworkError) as e:
                 logger.warning(
@@ -236,6 +241,9 @@ class BBIFatherBot:
                 logger.exception(f"❌ Неожиданная ошибка при отправке сообщения: {e}")
                 return False
 
+        chat = update.effective_chat
+        chat_id = chat.id if chat else "unknown"
+        logger.error(f"❌ Не удалось отправить ответ Telegram в chat_id {chat_id} после всех попыток")
         return False
 
     async def handle_error(self, update: object, context: ContextTypes.DEFAULT_TYPE):

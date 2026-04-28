@@ -715,3 +715,7 @@ git diff -- frontend/src/api.ts
 git stash push -m "server local api.ts before pull" -- frontend/src/api.ts
 git pull
 git stash pop
+
+cd /home/bbifather/bbifatherSPA
+
+dMa87H_?+yU2bP

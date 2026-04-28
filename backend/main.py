@@ -7,6 +7,7 @@ import socket
 import zipfile
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 import urllib.parse
 from typing import List, Dict, Any, Optional, Callable
@@ -69,9 +70,12 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_FORCE_IPV4 = os.getenv("TELEGRAM_FORCE_IPV4", "true").lower() == "true"
-TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "60"))
-TELEGRAM_READ_TIMEOUT = float(os.getenv("TELEGRAM_READ_TIMEOUT", "60"))
-TELEGRAM_SEND_RETRIES = max(1, int(os.getenv("TELEGRAM_SEND_RETRIES", "2")))
+TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "8"))
+TELEGRAM_READ_TIMEOUT = float(os.getenv("TELEGRAM_READ_TIMEOUT", "20"))
+TELEGRAM_SEND_RETRIES = max(1, int(os.getenv("TELEGRAM_SEND_RETRIES", "1")))
+TELEGRAM_ADMIN_NOTIFY_WORKERS = max(1, int(os.getenv("TELEGRAM_ADMIN_NOTIFY_WORKERS", "4")))
+TELEGRAM_FAILURE_COOLDOWN_SECONDS = max(0.0, float(os.getenv("TELEGRAM_FAILURE_COOLDOWN_SECONDS", "60")))
+TELEGRAM_UNAVAILABLE_UNTIL = 0.0
 
 if TELEGRAM_FORCE_IPV4:
     _original_getaddrinfo = socket.getaddrinfo
@@ -179,6 +183,16 @@ def sanitize_telegram_error(error: Exception) -> str:
         message = message.replace(BOT_TOKEN, "***")
     return message
 
+def telegram_api_is_paused() -> bool:
+    """Проверяет, стоит ли временно пропустить Telegram API после сетевого timeout."""
+    return time.monotonic() < TELEGRAM_UNAVAILABLE_UNTIL
+
+def pause_telegram_api():
+    """Ставит короткую паузу после сетевой ошибки, чтобы не забивать процесс одинаковыми запросами."""
+    global TELEGRAM_UNAVAILABLE_UNTIL
+    if TELEGRAM_FAILURE_COOLDOWN_SECONDS > 0:
+        TELEGRAM_UNAVAILABLE_UNTIL = time.monotonic() + TELEGRAM_FAILURE_COOLDOWN_SECONDS
+
 def post_telegram(
     method: str,
     payload: dict,
@@ -187,6 +201,8 @@ def post_telegram(
 ) -> Optional[requests.Response]:
     """Отправляет запрос в Telegram API с retry для временных ошибок."""
     if not BOT_TOKEN:
+        return None
+    if telegram_api_is_paused():
         return None
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
@@ -217,13 +233,35 @@ def post_telegram(
 
             return response
         except requests.RequestException as e:
-            print(f"⚠️ Ошибка запроса к Telegram API '{method}' (попытка {attempt + 1}/{retries}): {sanitize_telegram_error(e)}")
+            pause_telegram_api()
+            print(
+                f"⚠️ Telegram API timeout на '{method}'. "
+                f"Пауза отправки уведомлений на {TELEGRAM_FAILURE_COOLDOWN_SECONDS:.0f} сек: {sanitize_telegram_error(e)}"
+            )
             if attempt < retries - 1:
                 time.sleep(0.5 * (attempt + 1))
             else:
                 return last_response
 
     return last_response
+
+def send_telegram_message_to_chat(chat_id: str, message: str) -> bool:
+    """Отправляет одно админское уведомление и возвращает успех без блокировки других адресатов."""
+    payload = {
+        'chat_id': chat_id,
+        'text': message,
+        'parse_mode': 'HTML'
+    }
+    response = post_telegram("sendMessage", payload)
+    if response is None:
+        print(f"❌ Telegram API недоступен для администратора {chat_id}")
+        return False
+    if response.status_code == 200:
+        print(f"✅ Уведомление отправлено администратору {chat_id}")
+        return True
+
+    print(f"❌ Ошибка Telegram API для {chat_id}: {response.text}")
+    return False
 
 def enqueue_background(background_tasks: BackgroundTasks, task: Callable, *args, **kwargs) -> None:
     """Запускает тяжелые уведомления после ответа API, чтобы не держать UI."""
@@ -284,21 +322,17 @@ def send_notification(message: str):
         print(f"📣 Админ-цели для уведомления: {targets}")
 
         success_any = False
-        for chat_id in targets:
-            payload = {
-                'chat_id': chat_id,
-                'text': message,
-                'parse_mode': 'HTML'
-            }
-            response = post_telegram("sendMessage", payload)
-            if response is None:
-                print("❌ Telegram API недоступен или BOT_TOKEN не настроен")
-                continue
-            if response.status_code == 200:
-                success_any = True
-                print(f"✅ Уведомление отправлено администратору {chat_id}")
-            else:
-                print(f"❌ Ошибка Telegram API для {chat_id}: {response.text}")
+        max_workers = min(TELEGRAM_ADMIN_NOTIFY_WORKERS, max(1, len(targets)))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [
+                executor.submit(send_telegram_message_to_chat, chat_id, message)
+                for chat_id in targets
+            ]
+            for future in as_completed(futures):
+                try:
+                    success_any = bool(future.result()) or success_any
+                except Exception as e:
+                    print(f"❌ Ошибка отправки одному из администраторов: {sanitize_telegram_error(e)}")
 
         if not success_any:
             print("⚠️ Не удалось отправить сообщение ни одному администратору")
@@ -626,10 +660,16 @@ def notify_executors_board_entry(order: dict):
 
 def force_refresh_all_user_keyboards(silent: bool = True) -> dict:
     """Принудительно отправляет всем пользователям актуальную клавиатуру."""
+    print("ℹ️ Массовое обновление клавиатур отключено")
+    return {"status": "skipped", "reason": "keyboard refresh disabled"}
+
     if not BOT_TOKEN:
         return {"status": "skipped", "reason": "BOT_TOKEN не настроен"}
     if not supabase:
         return {"status": "skipped", "reason": "Supabase не настроен"}
+    if silent:
+        print("ℹ️ Silent-обновление клавиатур пропущено, чтобы не забивать Telegram API служебными сообщениями")
+        return {"status": "skipped", "reason": "silent refresh disabled"}
 
     try:
         students_response = supabase.table('students').select('id, telegram, chat_id').execute()
@@ -675,17 +715,6 @@ def force_refresh_all_user_keyboards(silent: bool = True) -> dict:
         response = post_telegram("sendMessage", payload)
         if response is not None and response.status_code == 200:
             sent += 1
-            if silent:
-                try:
-                    response_json = response.json()
-                    message_id = response_json.get("result", {}).get("message_id")
-                    if message_id:
-                        post_telegram("deleteMessage", {
-                            "chat_id": target["chat_id"],
-                            "message_id": message_id
-                        })
-                except Exception as e:
-                    print(f"⚠️ Не удалось удалить служебное сообщение для {target['chat_id']}: {e}")
         else:
             if response is not None and response.status_code == 403 and "blocked by the user" in response.text.lower():
                 blocked += 1
