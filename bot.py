@@ -16,6 +16,7 @@ import inspect
 from typing import Optional, List, Set
 
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, BotCommand
+from telegram.error import NetworkError, TelegramError, TimedOut
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.request import HTTPXRequest
 from dotenv import load_dotenv
@@ -77,6 +78,9 @@ TELEGRAM_FORCE_IPV4 = os.getenv("TELEGRAM_FORCE_IPV4", "true").lower() == "true"
 TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "30"))
 TELEGRAM_READ_TIMEOUT = float(os.getenv("TELEGRAM_READ_TIMEOUT", "30"))
 TELEGRAM_GET_UPDATES_READ_TIMEOUT = float(os.getenv("TELEGRAM_GET_UPDATES_READ_TIMEOUT", "60"))
+TELEGRAM_SEND_RETRIES = max(1, int(os.getenv("TELEGRAM_SEND_RETRIES", "2")))
+TELEGRAM_SEND_RETRY_DELAY_SECONDS = max(0.5, float(os.getenv("TELEGRAM_SEND_RETRY_DELAY_SECONDS", "2")))
+BACKEND_FAILURE_COOLDOWN_SECONDS = max(0.0, float(os.getenv("BACKEND_FAILURE_COOLDOWN_SECONDS", "60")))
 BOT_START_MAX_RETRIES = max(1, int(os.getenv("BOT_START_MAX_RETRIES", "8")))
 BOT_START_RETRY_DELAY_SECONDS = max(1.0, float(os.getenv("BOT_START_RETRY_DELAY_SECONDS", "5")))
 
@@ -121,6 +125,7 @@ class BBIFatherBot:
     def __init__(self):
         self.app: Optional[Application] = None
         self._is_running = False
+        self._backend_unavailable_until = 0.0
 
     def build_application(self):
         builder = Application.builder().token(BOT_TOKEN).post_init(self.on_post_init)
@@ -130,6 +135,7 @@ class BBIFatherBot:
             logger.info("🌐 Telegram proxy включен для бота")
         self.app = builder.build()
         self.setup_handlers()
+        self.app.add_error_handler(self.handle_error)
 
     def create_telegram_request(self, read_timeout: float) -> HTTPXRequest:
         """Создает Telegram HTTP client с proxy/timeouts под установленную версию PTB."""
@@ -197,6 +203,81 @@ class BBIFatherBot:
             return api_url[:-4]
         return api_url
 
+    def backend_sync_is_paused(self) -> bool:
+        """Проверяет, стоит ли временно пропустить синхронизацию с backend."""
+        return time.monotonic() < self._backend_unavailable_until
+
+    def pause_backend_sync(self):
+        """Ставит короткую паузу после сетевой ошибки backend, чтобы бот продолжал отвечать."""
+        if BACKEND_FAILURE_COOLDOWN_SECONDS > 0:
+            self._backend_unavailable_until = time.monotonic() + BACKEND_FAILURE_COOLDOWN_SECONDS
+
+    async def post_to_backend(self, url: str, json_payload: dict, timeout: float, action: str) -> Optional[requests.Response]:
+        """Выполняет POST в backend без влияния на обработку Telegram-сообщений."""
+        if self.backend_sync_is_paused():
+            logger.warning(f"⏸️ Backend недоступен, пропускаем действие '{action}' до следующей попытки")
+            return None
+
+        try:
+            return await asyncio.to_thread(
+                requests.post,
+                url,
+                json=json_payload,
+                timeout=timeout
+            )
+        except requests.exceptions.RequestException as e:
+            self.pause_backend_sync()
+            logger.warning(f"⚠️ Backend недоступен при действии '{action}': {e}")
+            return None
+        except Exception as e:
+            logger.error(f"❌ Ошибка backend-запроса '{action}': {e}")
+            return None
+
+    def remember_admin_chat_id(self, user):
+        """Добавляет chat_id админа по username даже если backend сейчас недоступен."""
+        try:
+            username_l = (user.username or '').lower()
+            if username_l in ADMIN_USERNAMES:
+                ADMIN_DYNAMIC_CHAT_IDS.add(str(user.id))
+                logger.info(f"👑 Добавлен admin chat_id {user.id} для @{user.username}")
+        except Exception as e:
+            logger.error(f"❌ Ошибка добавления admin chat_id: {e}")
+
+    async def reply_text_safely(self, update: Update, text: str, **kwargs) -> bool:
+        """Отправляет ответ пользователю с retry на сетевые сбои Telegram API."""
+        message = update.effective_message
+        if not message:
+            logger.warning("⚠️ Невозможно ответить: в update нет сообщения")
+            return False
+
+        for attempt in range(1, TELEGRAM_SEND_RETRIES + 1):
+            try:
+                await message.reply_text(text, **kwargs)
+                return True
+            except (TimedOut, NetworkError) as e:
+                logger.warning(
+                    f"⚠️ Telegram API не ответил при отправке сообщения "
+                    f"(попытка {attempt}/{TELEGRAM_SEND_RETRIES}): {e}"
+                )
+                if attempt < TELEGRAM_SEND_RETRIES:
+                    await asyncio.sleep(TELEGRAM_SEND_RETRY_DELAY_SECONDS * attempt)
+            except TelegramError as e:
+                logger.error(f"❌ Ошибка Telegram API при отправке сообщения: {e}")
+                return False
+            except Exception as e:
+                logger.exception(f"❌ Неожиданная ошибка при отправке сообщения: {e}")
+                return False
+
+        return False
+
+    async def handle_error(self, update: object, context: ContextTypes.DEFAULT_TYPE):
+        """Логирует ошибки обработчиков, чтобы polling продолжал работать предсказуемо."""
+        error = context.error
+        if isinstance(error, (TimedOut, NetworkError)):
+            logger.warning(f"⚠️ Сетевая ошибка Telegram API, polling продолжает работу: {error}")
+            return
+        logger.exception("❌ Необработанная ошибка в Telegram-обработчике", exc_info=error)
+
     async def force_refresh_all_users_keyboards(self):
         """Принудительное обновление клавиатуры для всех пользователей в базе."""
         refresh_urls = [
@@ -211,12 +292,14 @@ class BBIFatherBot:
         for attempt in range(1, max_attempts + 1):
             for refresh_url in refresh_urls:
                 try:
-                    response = await asyncio.to_thread(
-                        requests.post,
+                    response = await self.post_to_backend(
                         refresh_url,
-                        json={"silent": True},
-                        timeout=20
+                        {"silent": True},
+                        20,
+                        "force-refresh-keyboards"
                     )
+                    if response is None:
+                        continue
                     if response.status_code == 200:
                         logger.info(f"✅ Обновление меню выполнено: {response.text}")
                         return
@@ -271,7 +354,8 @@ class BBIFatherBot:
         
         keyboard = self.get_main_keyboard(user.username)
         
-        await update.message.reply_text(
+        await self.reply_text_safely(
+            update,
             welcome_text,
             reply_markup=keyboard,
             parse_mode='HTML'
@@ -300,7 +384,8 @@ class BBIFatherBot:
         
         keyboard = self.get_main_keyboard(update.effective_user.username)
         
-        await update.message.reply_text(
+        await self.reply_text_safely(
+            update,
             help_text,
             reply_markup=keyboard,
             parse_mode='HTML'
@@ -347,6 +432,8 @@ class BBIFatherBot:
 
     async def save_user_chat_id(self, user):
         """Сохранение chat_id пользователя для отправки уведомлений"""
+        self.remember_admin_chat_id(user)
+
         if not user.username:
             logger.warning(f"У пользователя {user.first_name} (ID: {user.id}) нет username")
             return
@@ -356,17 +443,19 @@ class BBIFatherBot:
             logger.info(f"🌐 Отправляем chat_id на: {full_url}")
 
             # Выполняем блокирующий HTTP-запрос в отдельном потоке, чтобы не блокировать event loop
-            response = await asyncio.to_thread(
-                requests.post,
+            response = await self.post_to_backend(
                 full_url,
-                json={
+                {
                     "telegram_username": user.username,
                     "chat_id": user.id,
                     "first_name": user.first_name,
                     "last_name": user.last_name or ""
                 },
-                timeout=5
+                5,
+                "save-chat-id"
             )
+            if response is None:
+                return
 
             if response.status_code == 200:
                 logger.info(f"✅ Chat ID сохранен для @{user.username}")
@@ -375,15 +464,6 @@ class BBIFatherBot:
 
         except Exception as e:
             logger.error(f"❌ Ошибка сохранения chat_id: {e}")
-
-        # Авто-обнаружение админов по username и добавление их chat_id в список получателей
-        try:
-            username_l = (user.username or '').lower()
-            if username_l in ADMIN_USERNAMES:
-                ADMIN_DYNAMIC_CHAT_IDS.add(str(user.id))
-                logger.info(f"👑 Добавлен admin chat_id {user.id} для @{user.username}")
-        except Exception as e:
-            logger.error(f"❌ Ошибка добавления admin chat_id: {e}")
 
     async def send_rules(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edit: bool = False):
         """Отправка правил пользования сервисом"""
@@ -416,7 +496,8 @@ class BBIFatherBot:
         
         keyboard = self.get_main_keyboard(update.effective_user.username)
         
-        await update.message.reply_text(
+        await self.reply_text_safely(
+            update,
             rules_text,
             reply_markup=keyboard,
             parse_mode='HTML'
@@ -429,7 +510,12 @@ class BBIFatherBot:
             f"🆔 Ваш Telegram ID: <code>{user.id}</code>\n"
             f"👤 Username: @{user.username or 'не указан'}"
         )
-        await update.message.reply_text(text, parse_mode='HTML', reply_markup=self.get_main_keyboard(user.username))
+        await self.reply_text_safely(
+            update,
+            text,
+            parse_mode='HTML',
+            reply_markup=self.get_main_keyboard(user.username)
+        )
 
     async def handle_support_request(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edit: bool = False):
         """Обработка запроса в техподдержку - перенаправление к админу"""
@@ -451,7 +537,8 @@ class BBIFatherBot:
         
         keyboard = self.get_main_keyboard(user.username)
         
-        await update.message.reply_text(
+        await self.reply_text_safely(
+            update,
             support_text,
             reply_markup=keyboard,
             parse_mode='HTML'
@@ -475,7 +562,8 @@ class BBIFatherBot:
         
         # Обработка кнопок меню
         if message_text in ("📱 Открыть мини-апп", "📱 Открыть приложение", "📥 Скачать файлы"):
-            await update.message.reply_text(
+            await self.reply_text_safely(
+                update,
                 "Используйте кнопку `📱 Открыть мини-апп` в меню, чтобы открыть актуальную версию сервиса.",
                 reply_markup=self.get_main_keyboard(user.username),
                 parse_mode='Markdown'
@@ -488,7 +576,8 @@ class BBIFatherBot:
             await self.send_user_guide(update, context)
         else:
             # Неизвестное сообщение - показываем главное меню
-            await update.message.reply_text(
+            await self.reply_text_safely(
+                update,
                 "Выберите одну из кнопок меню ниже:",
                 reply_markup=self.get_main_keyboard(user.username)
             )
@@ -499,7 +588,8 @@ class BBIFatherBot:
         message_text = update.message.text
         
         # Подтверждение пользователю
-        await update.message.reply_text(
+        await self.reply_text_safely(
+            update,
             "✅ Ваше сообщение отправлено в техподдержку!\n\n"
             "Мы ответим вам в ближайшее время.",
             reply_markup=self.get_main_keyboard(user.username)
@@ -595,7 +685,8 @@ class BBIFatherBot:
         
         keyboard = self.get_main_keyboard(update.effective_user.username)
         
-        await update.message.reply_text(
+        await self.reply_text_safely(
+            update,
             guide_text,
             reply_markup=keyboard,
             parse_mode='HTML'
