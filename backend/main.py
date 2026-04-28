@@ -8,7 +8,8 @@ import zipfile
 import tempfile
 import time
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import queue
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 import urllib.parse
 from typing import List, Dict, Any, Optional, Callable
@@ -41,11 +42,13 @@ async def lifespan(app: FastAPI):
         print(f"🔧 BOT_CHAT_ID: {BOT_CHAT_ID}")
         print(f"🔧 ADMIN_CHAT_IDS: {ADMIN_CHAT_IDS}")
         print(f"🔧 Raw TELEGRAM_ADMIN_CHAT_IDS: {os.getenv('TELEGRAM_ADMIN_CHAT_IDS', 'НЕ ЗАДАНО')}")
+        start_telegram_notification_worker()
     else:
         print("⚠️ Telegram уведомления не настроены")
 
     yield
     # Shutdown
+    stop_telegram_notification_worker()
     print("👋 Backend остановлен")
 
 # Создаем приложение FastAPI
@@ -74,10 +77,16 @@ TELEGRAM_FORCE_IPV4 = os.getenv("TELEGRAM_FORCE_IPV4", "true").lower() == "true"
 TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "5"))
 TELEGRAM_READ_TIMEOUT = float(os.getenv("TELEGRAM_READ_TIMEOUT", "20"))
 TELEGRAM_SEND_RETRIES = max(1, int(os.getenv("TELEGRAM_SEND_RETRIES", "2")))
-TELEGRAM_ADMIN_NOTIFY_WORKERS = max(1, int(os.getenv("TELEGRAM_ADMIN_NOTIFY_WORKERS", "4")))
 TELEGRAM_ERROR_LOG_COOLDOWN_SECONDS = max(0.0, float(os.getenv("TELEGRAM_ERROR_LOG_COOLDOWN_SECONDS", "30")))
 TELEGRAM_SESSION_LOCAL = threading.local()
 TELEGRAM_LAST_ERROR_LOG_AT: Dict[str, float] = {}
+TELEGRAM_QUEUE_MAX_SIZE = max(10, int(os.getenv("TELEGRAM_QUEUE_MAX_SIZE", "500")))
+TELEGRAM_QUEUE_MAX_ATTEMPTS = max(1, int(os.getenv("TELEGRAM_QUEUE_MAX_ATTEMPTS", "8")))
+TELEGRAM_QUEUE_RETRY_BASE_SECONDS = max(1.0, float(os.getenv("TELEGRAM_QUEUE_RETRY_BASE_SECONDS", "10")))
+TELEGRAM_QUEUE_RETRY_MAX_SECONDS = max(5.0, float(os.getenv("TELEGRAM_QUEUE_RETRY_MAX_SECONDS", "300")))
+TELEGRAM_NOTIFICATION_QUEUE: "queue.Queue[Optional[TelegramNotification]]" = queue.Queue(maxsize=TELEGRAM_QUEUE_MAX_SIZE)
+TELEGRAM_QUEUE_STOP = threading.Event()
+TELEGRAM_QUEUE_WORKER: Optional[threading.Thread] = None
 
 if TELEGRAM_FORCE_IPV4:
     _original_getaddrinfo = socket.getaddrinfo
@@ -249,6 +258,105 @@ def post_telegram(
 
     return last_response
 
+@dataclass
+class TelegramNotification:
+    method: str
+    payload: dict
+    description: str
+    attempt: int = 1
+
+def queue_telegram_notification(method: str, payload: dict, description: str) -> bool:
+    """Кладет Telegram-уведомление в очередь, чтобы переживать временные timeout."""
+    if not BOT_TOKEN:
+        return False
+
+    try:
+        TELEGRAM_NOTIFICATION_QUEUE.put_nowait(TelegramNotification(method, payload, description))
+        print(f"📬 Telegram уведомление поставлено в очередь: {description}")
+        return True
+    except queue.Full:
+        print(f"❌ Очередь Telegram уведомлений переполнена, уведомление пропущено: {description}")
+        return False
+
+def retry_telegram_notification(notification: TelegramNotification):
+    """Возвращает уведомление в очередь после backoff, не блокируя worker."""
+    delay = min(
+        TELEGRAM_QUEUE_RETRY_BASE_SECONDS * (2 ** max(notification.attempt - 1, 0)),
+        TELEGRAM_QUEUE_RETRY_MAX_SECONDS
+    )
+    notification.attempt += 1
+
+    def requeue():
+        if TELEGRAM_QUEUE_STOP.is_set():
+            return
+        try:
+            TELEGRAM_NOTIFICATION_QUEUE.put_nowait(notification)
+            print(f"🔁 Повторная отправка Telegram уведомления в очереди: {notification.description}")
+        except queue.Full:
+            print(f"❌ Очередь Telegram уведомлений переполнена при повторе: {notification.description}")
+
+    timer = threading.Timer(delay, requeue)
+    timer.daemon = True
+    timer.start()
+
+def telegram_notification_worker():
+    """Фоновая доставка Telegram-уведомлений с повтором после временных ошибок сети."""
+    while not TELEGRAM_QUEUE_STOP.is_set():
+        try:
+            notification = TELEGRAM_NOTIFICATION_QUEUE.get(timeout=0.5)
+        except queue.Empty:
+            continue
+
+        try:
+            if notification is None:
+                continue
+
+            response = post_telegram(notification.method, notification.payload)
+            if response is not None and response.status_code == 200:
+                print(f"✅ Telegram уведомление доставлено: {notification.description}")
+                continue
+
+            status_code = response.status_code if response is not None else None
+            response_text = response.text if response is not None else "Telegram API недоступен"
+            if status_code in (400, 403):
+                print(f"❌ Telegram уведомление не будет повторяться ({status_code}): {notification.description}: {response_text}")
+                continue
+
+            if notification.attempt < TELEGRAM_QUEUE_MAX_ATTEMPTS:
+                print(
+                    f"⏳ Telegram уведомление не доставлено, будет повтор "
+                    f"{notification.attempt + 1}/{TELEGRAM_QUEUE_MAX_ATTEMPTS}: {notification.description}"
+                )
+                retry_telegram_notification(notification)
+            else:
+                print(f"❌ Telegram уведомление не доставлено после всех попыток: {notification.description}: {response_text}")
+        except Exception as e:
+            print(f"❌ Ошибка worker Telegram уведомлений: {sanitize_telegram_error(e)}")
+        finally:
+            TELEGRAM_NOTIFICATION_QUEUE.task_done()
+
+def start_telegram_notification_worker():
+    """Запускает один worker очереди уведомлений."""
+    global TELEGRAM_QUEUE_WORKER
+    if TELEGRAM_QUEUE_WORKER and TELEGRAM_QUEUE_WORKER.is_alive():
+        return
+    TELEGRAM_QUEUE_STOP.clear()
+    TELEGRAM_QUEUE_WORKER = threading.Thread(
+        target=telegram_notification_worker,
+        name="telegram-notification-worker",
+        daemon=True
+    )
+    TELEGRAM_QUEUE_WORKER.start()
+    print("📬 Очередь Telegram уведомлений запущена")
+
+def stop_telegram_notification_worker():
+    """Останавливает worker очереди без долгого ожидания сетевых запросов."""
+    TELEGRAM_QUEUE_STOP.set()
+    try:
+        TELEGRAM_NOTIFICATION_QUEUE.put_nowait(None)
+    except queue.Full:
+        pass
+
 def send_telegram_message_to_chat(chat_id: str, message: str) -> bool:
     """Отправляет одно админское уведомление и возвращает успех без блокировки других адресатов."""
     payload = {
@@ -256,16 +364,7 @@ def send_telegram_message_to_chat(chat_id: str, message: str) -> bool:
         'text': message,
         'parse_mode': 'HTML'
     }
-    response = post_telegram("sendMessage", payload)
-    if response is None:
-        print(f"❌ Telegram API недоступен для администратора {chat_id}")
-        return False
-    if response.status_code == 200:
-        print(f"✅ Уведомление отправлено администратору {chat_id}")
-        return True
-
-    print(f"❌ Ошибка Telegram API для {chat_id}: {response.text}")
-    return False
+    return queue_telegram_notification("sendMessage", payload, f"админ {chat_id}")
 
 def enqueue_background(background_tasks: BackgroundTasks, task: Callable, *args, **kwargs) -> None:
     """Запускает тяжелые уведомления после ответа API, чтобы не держать UI."""
@@ -325,21 +424,12 @@ def send_notification(message: str):
         targets = parse_chat_ids(BOT_CHAT_ID, ",".join(ADMIN_CHAT_IDS))
         print(f"📣 Админ-цели для уведомления: {targets}")
 
-        success_any = False
-        max_workers = min(TELEGRAM_ADMIN_NOTIFY_WORKERS, max(1, len(targets)))
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = [
-                executor.submit(send_telegram_message_to_chat, chat_id, message)
-                for chat_id in targets
-            ]
-            for future in as_completed(futures):
-                try:
-                    success_any = bool(future.result()) or success_any
-                except Exception as e:
-                    print(f"❌ Ошибка отправки одному из администраторов: {sanitize_telegram_error(e)}")
+        queued_any = False
+        for chat_id in targets:
+            queued_any = send_telegram_message_to_chat(chat_id, message) or queued_any
 
-        if not success_any:
-            print("⚠️ Не удалось отправить сообщение ни одному администратору")
+        if not queued_any:
+            print("⚠️ Не удалось поставить сообщение в очередь ни одному администратору")
     except Exception as e:
         print(f"❌ Ошибка отправки в Telegram: {e}")
         print(f"📱 УВЕДОМЛЕНИЕ: {message}")
@@ -358,14 +448,7 @@ def send_executor_notification(message: str):
                 'text': message,
                 'parse_mode': 'HTML'
             }
-            response = post_telegram("sendMessage", payload)
-            if response is None:
-                print("❌ Telegram API недоступен или BOT_TOKEN не настроен")
-                continue
-            if response.status_code == 200:
-                print(f"✅ Уведомление исполнителю отправлено: {chat_id}")
-            else:
-                print(f"❌ Ошибка Telegram API для {chat_id}: {response.text}")
+            queue_telegram_notification("sendMessage", payload, f"исполнитель {chat_id}")
     except Exception as e:
         print(f"❌ Ошибка отправки исполнителям в Telegram: {e}")
         print(f"📱 УВЕДОМЛЕНИЕ: {message}")
@@ -585,23 +668,13 @@ def send_status_notification_to_user(order: dict, new_status: str):
             'reply_markup': keyboard
         }
 
-        response = post_telegram("sendMessage", payload)
-        if response is None:
-            print("❌ Не удалось отправить уведомление: Telegram API недоступен или BOT_TOKEN не настроен")
-            return
-
-        if response.status_code == 200:
-            print(f"✅ Уведомление о статусе '{new_status}' отправлено пользователю @{user_telegram}")
-        else:
-            print(f"⚠️ Не удалось отправить уведомление @{user_telegram}: {response.text}")
-            if response.status_code == 403 and "blocked by the user" in response.text.lower():
-                try:
-                    student_id = order.get('student', {}).get('id')
-                    if student_id:
-                        supabase.table('students').update({'chat_id': None}).eq('id', student_id).execute()
-                        print(f"🧹 Chat ID очищен для студента ID {student_id}: бот заблокирован")
-                except Exception as cleanup_error:
-                    print(f"⚠️ Не удалось очистить chat_id после блокировки: {cleanup_error}")
+        queued = queue_telegram_notification(
+            "sendMessage",
+            payload,
+            f"статус '{new_status}' для @{user_telegram}"
+        )
+        if not queued:
+            print(f"❌ Не удалось поставить уведомление о статусе '{new_status}' в очередь для @{user_telegram}")
             
     except Exception as e:
         print(f"❌ Ошибка отправки уведомления пользователю @{user_telegram}: {e}")
@@ -666,89 +739,6 @@ def force_refresh_all_user_keyboards(silent: bool = True) -> dict:
     """Принудительно отправляет всем пользователям актуальную клавиатуру."""
     print("ℹ️ Массовое обновление клавиатур отключено")
     return {"status": "skipped", "reason": "keyboard refresh disabled"}
-
-    if not BOT_TOKEN:
-        return {"status": "skipped", "reason": "BOT_TOKEN не настроен"}
-    if not supabase:
-        return {"status": "skipped", "reason": "Supabase не настроен"}
-    if silent:
-        print("ℹ️ Silent-обновление клавиатур пропущено, чтобы не забивать Telegram API служебными сообщениями")
-        return {"status": "skipped", "reason": "silent refresh disabled"}
-
-    try:
-        students_response = supabase.table('students').select('id, telegram, chat_id').execute()
-        students = students_response.data or []
-    except Exception as e:
-        return {"status": "error", "reason": f"Ошибка чтения студентов: {e}"}
-
-    targets = []
-    for student in students:
-        raw_chat_id = student.get('chat_id')
-        chat_id = str(raw_chat_id).strip()
-        # Пропускаем пустые/битые значения chat_id из БД.
-        if not chat_id or chat_id.lower() in {"none", "null", "nan"}:
-            continue
-        if not chat_id.lstrip("-").isdigit():
-            continue
-        if chat_id:
-            targets.append({
-                "student_id": student.get("id"),
-                "chat_id": chat_id,
-                "telegram": (student.get('telegram') or '').strip()
-            })
-
-    sent = 0
-    failed = 0
-    blocked = 0
-    blocked_student_ids: List[int] = []
-    unique_targets = {}
-    for target in targets:
-        unique_targets[target["chat_id"]] = target
-
-    for target in unique_targets.values():
-        telegram_username = target["telegram"] or None
-        payload = {
-            "chat_id": target["chat_id"],
-            # Telegram не принимает zero-width text как непустой, поэтому отправляем минимальный служебный текст
-            # и сразу удаляем сообщение при silent=True.
-            "text": ("." if silent else "Клавиатура бота обновлена."),
-            "parse_mode": "HTML",
-            "disable_notification": True,
-            "reply_markup": build_main_reply_keyboard(telegram_username)
-        }
-        response = post_telegram("sendMessage", payload)
-        if response is not None and response.status_code == 200:
-            sent += 1
-        else:
-            if response is not None and response.status_code == 403 and "blocked by the user" in response.text.lower():
-                blocked += 1
-                student_id = target.get("student_id")
-                if isinstance(student_id, int):
-                    blocked_student_ids.append(student_id)
-            else:
-                failed += 1
-                if response is not None:
-                    print(f"⚠️ Не удалось обновить клавиатуру для {target['chat_id']}: {response.text}")
-        # Мягкое троттлирование, чтобы снизить риск 429 при массовой рассылке
-        time.sleep(0.06)
-
-    # Очищаем chat_id у пользователей, которые заблокировали бота,
-    # чтобы не пытаться отправлять им массовые обновления в будущем.
-    if blocked_student_ids:
-        try:
-            for student_id in list(dict.fromkeys(blocked_student_ids)):
-                supabase.table('students').update({'chat_id': None}).eq('id', student_id).execute()
-            print(f"🧹 Очищены chat_id у {len(set(blocked_student_ids))} пользователей, заблокировавших бота")
-        except Exception as e:
-            print(f"⚠️ Не удалось очистить chat_id заблокированных пользователей: {e}")
-
-    return {
-        "status": "completed",
-        "total_targets": len(unique_targets),
-        "sent": sent,
-        "failed": failed,
-        "blocked": blocked
-    }
 
 # Старый startup удален - теперь используем lifespan
 
@@ -946,7 +936,11 @@ async def send_files_to_telegram_handler(request: Request):
             'parse_mode': 'HTML'
         }
         
-        post_telegram("sendMessage", intro_payload)
+        queue_telegram_notification(
+            "sendMessage",
+            intro_payload,
+            f"вступительное сообщение с файлами заказа #{order_id}"
+        )
         
         # Отправляем каждый файл
         sent_count = 0
@@ -1070,7 +1064,11 @@ async def send_files_to_telegram_handler(request: Request):
             'parse_mode': 'HTML'
         }
         
-        post_telegram("sendMessage", final_payload)
+        queue_telegram_notification(
+            "sendMessage",
+            final_payload,
+            f"итог отправки файлов заказа #{order_id}"
+        )
         
         return {
             "status": "success" if sent_count > 0 else "partial_success" if sent_count == 0 and len(files) > 0 else "error",
@@ -2215,7 +2213,11 @@ async def notify_payment(order_id: int, background_tasks: BackgroundTasks):
                     'reply_markup': build_main_reply_keyboard(user_telegram)
                 }
 
-                enqueue_background(background_tasks, post_telegram, "sendMessage", payload)
+                queue_telegram_notification(
+                    "sendMessage",
+                    payload,
+                    f"заявка на оплату для @{user_telegram}"
+                )
                 print(f"✅ Уведомление о заявке на оплату поставлено в очередь для @{user_telegram}")
             else:
                 print(f"⚠️ Chat ID не найден для пользователя @{user_telegram}, уведомление пользователю пропущено")
