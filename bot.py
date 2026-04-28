@@ -64,7 +64,7 @@ ADMIN_DYNAMIC_CHAT_IDS: Set[str] = set()
 SUPPORT_USERNAME = os.getenv("TELEGRAM_SUPPORT_USERNAME", "artemonsup")
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://bbifather.ru")
 # Бот и backend обычно работают на одном сервере. Локальный адрес не зависит от nginx
-# и не ловит 502, пока публичный прокси еще поднимается.
+# и не ловит 502, пока публичный frontend еще поднимается.
 API_BASE_URL = (
     os.getenv("BOT_API_BASE_URL")
     or os.getenv("INTERNAL_API_BASE_URL")
@@ -73,16 +73,16 @@ API_BASE_URL = (
 FORCE_REFRESH_BOT_USERS_ON_STARTUP = os.getenv("FORCE_REFRESH_BOT_USERS_ON_STARTUP", "true").lower() == "true"
 FORCE_REFRESH_STARTUP_DELAY_SECONDS = float(os.getenv("FORCE_REFRESH_STARTUP_DELAY_SECONDS", "3"))
 UPDATE_BOT_COMMANDS_ON_STARTUP = os.getenv("UPDATE_BOT_COMMANDS_ON_STARTUP", "false").lower() == "true"
-TELEGRAM_PROXY_URL = os.getenv("TELEGRAM_PROXY_URL", "").strip()
 TELEGRAM_FORCE_IPV4 = os.getenv("TELEGRAM_FORCE_IPV4", "true").lower() == "true"
-TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "30"))
-TELEGRAM_READ_TIMEOUT = float(os.getenv("TELEGRAM_READ_TIMEOUT", "30"))
+TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "60"))
+TELEGRAM_READ_TIMEOUT = float(os.getenv("TELEGRAM_READ_TIMEOUT", "60"))
 TELEGRAM_GET_UPDATES_READ_TIMEOUT = float(os.getenv("TELEGRAM_GET_UPDATES_READ_TIMEOUT", "60"))
 TELEGRAM_SEND_RETRIES = max(1, int(os.getenv("TELEGRAM_SEND_RETRIES", "2")))
 TELEGRAM_SEND_RETRY_DELAY_SECONDS = max(0.5, float(os.getenv("TELEGRAM_SEND_RETRY_DELAY_SECONDS", "2")))
 BACKEND_FAILURE_COOLDOWN_SECONDS = max(0.0, float(os.getenv("BACKEND_FAILURE_COOLDOWN_SECONDS", "60")))
 BOT_START_MAX_RETRIES = max(1, int(os.getenv("BOT_START_MAX_RETRIES", "8")))
 BOT_START_RETRY_DELAY_SECONDS = max(1.0, float(os.getenv("BOT_START_RETRY_DELAY_SECONDS", "5")))
+BOT_BOOTSTRAP_RETRIES = int(os.getenv("BOT_BOOTSTRAP_RETRIES", "10"))
 
 if TELEGRAM_FORCE_IPV4:
     _original_getaddrinfo = socket.getaddrinfo
@@ -97,30 +97,6 @@ if TELEGRAM_FORCE_IPV4:
 if not BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN не задан в .env файле!")
 
-def normalize_proxy_url(raw_proxy: str) -> str:
-    """Проверяет и нормализует URL прокси; при ошибке возвращает пустую строку."""
-    value = (raw_proxy or "").strip()
-    if not value:
-        return ""
-
-    lowered = value.lower()
-    if "user:pass@" in lowered or lowered.endswith(":port") or "host:port" in lowered:
-        logger.warning("⚠️ TELEGRAM_PROXY_URL похож на шаблон. Прокси отключен.")
-        return ""
-
-    try:
-        parsed = urllib.parse.urlparse(value)
-        if not parsed.scheme or not parsed.hostname or parsed.port is None:
-            logger.warning("⚠️ TELEGRAM_PROXY_URL некорректен. Прокси отключен.")
-            return ""
-    except Exception:
-        logger.warning("⚠️ TELEGRAM_PROXY_URL не удалось распарсить. Прокси отключен.")
-        return ""
-
-    return value
-
-VALID_TELEGRAM_PROXY_URL = normalize_proxy_url(TELEGRAM_PROXY_URL)
-
 class BBIFatherBot:
     def __init__(self):
         self.app: Optional[Application] = None
@@ -131,14 +107,12 @@ class BBIFatherBot:
         builder = Application.builder().token(BOT_TOKEN).post_init(self.on_post_init)
         builder = builder.request(self.create_telegram_request(read_timeout=TELEGRAM_READ_TIMEOUT))
         builder = builder.get_updates_request(self.create_telegram_request(read_timeout=TELEGRAM_GET_UPDATES_READ_TIMEOUT))
-        if VALID_TELEGRAM_PROXY_URL:
-            logger.info("🌐 Telegram proxy включен для бота")
         self.app = builder.build()
         self.setup_handlers()
         self.app.add_error_handler(self.handle_error)
 
     def create_telegram_request(self, read_timeout: float) -> HTTPXRequest:
-        """Создает Telegram HTTP client с proxy/timeouts под установленную версию PTB."""
+        """Создает Telegram HTTP client с timeouts под установленную версию PTB."""
         signature = inspect.signature(HTTPXRequest)
         supported_params = signature.parameters
         kwargs = {}
@@ -151,12 +125,6 @@ class BBIFatherBot:
         }.items():
             if name in supported_params:
                 kwargs[name] = value
-
-        if VALID_TELEGRAM_PROXY_URL:
-            if "proxy_url" in supported_params:
-                kwargs["proxy_url"] = VALID_TELEGRAM_PROXY_URL
-            elif "proxy" in supported_params:
-                kwargs["proxy"] = VALID_TELEGRAM_PROXY_URL
 
         return HTTPXRequest(**kwargs)
 
@@ -707,7 +675,7 @@ class BBIFatherBot:
                 logger.info(f"🚀 Старт polling: попытка {attempt}/{BOT_START_MAX_RETRIES}")
                 self.app.run_polling(
                     drop_pending_updates=False,
-                    bootstrap_retries=0,
+                    bootstrap_retries=BOT_BOOTSTRAP_RETRIES,
                     timeout=int(TELEGRAM_GET_UPDATES_READ_TIMEOUT),
                     close_loop=False,
                     stop_signals=None  # Для Windows
@@ -716,6 +684,19 @@ class BBIFatherBot:
             except KeyboardInterrupt:
                 logger.info("👋 Бот остановлен пользователем")
                 return
+            except (TimedOut, NetworkError) as e:
+                logger.error(
+                    f"❌ Telegram API недоступен при старте (попытка {attempt}/{BOT_START_MAX_RETRIES}): {e}"
+                )
+                logger.error(
+                    "🔌 Проверьте с сервера: curl -4 https://api.telegram.org. "
+                    "Если таймаут повторяется, проверьте DNS, IPv4-маршрутизацию и outbound-доступ к 443 порту."
+                )
+                if attempt >= BOT_START_MAX_RETRIES:
+                    raise
+                sleep_for = min(BOT_START_RETRY_DELAY_SECONDS * attempt, 30)
+                logger.info(f"⏳ Повторный старт через {sleep_for:.0f} сек...")
+                time.sleep(sleep_for)
             except Exception as e:
                 logger.error(f"❌ Ошибка старта бота (попытка {attempt}/{BOT_START_MAX_RETRIES}): {e}")
                 if attempt >= BOT_START_MAX_RETRIES:
