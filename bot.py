@@ -517,8 +517,6 @@ class BBIFatherBot:
                 drop_pending_updates=True,
                 bootstrap_retries=-1,
                 timeout=30,
-                connect_timeout=20,
-                read_timeout=20,
                 close_loop=False,
                 stop_signals=None  # Для Windows
             )
