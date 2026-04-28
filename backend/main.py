@@ -68,8 +68,10 @@ app.add_middleware(
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_PROXY_URL = os.getenv("TELEGRAM_PROXY_URL", "").strip()
 TELEGRAM_FORCE_IPV4 = os.getenv("TELEGRAM_FORCE_IPV4", "true").lower() == "true"
+TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "60"))
+TELEGRAM_READ_TIMEOUT = float(os.getenv("TELEGRAM_READ_TIMEOUT", "60"))
+TELEGRAM_SEND_RETRIES = max(1, int(os.getenv("TELEGRAM_SEND_RETRIES", "2")))
 
 if TELEGRAM_FORCE_IPV4:
     _original_getaddrinfo = socket.getaddrinfo
@@ -170,18 +172,30 @@ def build_main_reply_keyboard(telegram_username: Optional[str] = None) -> dict:
         "input_field_placeholder": "Выберите действие из меню ниже"
     }
 
-def post_telegram(method: str, payload: dict, retries: int = 2, timeout: int = 4) -> Optional[requests.Response]:
+def sanitize_telegram_error(error: Exception) -> str:
+    """Убирает токен бота из текстов сетевых ошибок."""
+    message = str(error)
+    if BOT_TOKEN:
+        message = message.replace(BOT_TOKEN, "***")
+    return message
+
+def post_telegram(
+    method: str,
+    payload: dict,
+    retries: int = TELEGRAM_SEND_RETRIES,
+    timeout: Optional[float] = None
+) -> Optional[requests.Response]:
     """Отправляет запрос в Telegram API с retry для временных ошибок."""
     if not BOT_TOKEN:
         return None
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
-    proxies = {"http": TELEGRAM_PROXY_URL, "https": TELEGRAM_PROXY_URL} if TELEGRAM_PROXY_URL else None
+    request_timeout = timeout if timeout is not None else (TELEGRAM_CONNECT_TIMEOUT, TELEGRAM_READ_TIMEOUT)
     last_response = None
 
     for attempt in range(retries):
         try:
-            response = requests.post(url, json=payload, timeout=timeout, proxies=proxies)
+            response = requests.post(url, json=payload, timeout=request_timeout)
             last_response = response
 
             # Успех
@@ -203,7 +217,7 @@ def post_telegram(method: str, payload: dict, retries: int = 2, timeout: int = 4
 
             return response
         except requests.RequestException as e:
-            print(f"⚠️ Ошибка запроса к Telegram API (попытка {attempt + 1}/{retries}): {e}")
+            print(f"⚠️ Ошибка запроса к Telegram API '{method}' (попытка {attempt + 1}/{retries}): {sanitize_telegram_error(e)}")
             if attempt < retries - 1:
                 time.sleep(0.5 * (attempt + 1))
             else:
@@ -711,7 +725,7 @@ def read_root():
     return {"message": "Student Orders API is running"}
 
 @app.post("/api/bot/force-refresh-keyboards")
-async def force_refresh_keyboards(request: Request):
+async def force_refresh_keyboards(request: Request, background_tasks: BackgroundTasks):
     """Принудительное обновление клавиатуры для всех пользователей."""
     silent = True
     try:
@@ -722,11 +736,11 @@ async def force_refresh_keyboards(request: Request):
         # Тело может отсутствовать, в этом случае используем silent=True по умолчанию.
         pass
 
-    result = force_refresh_all_user_keyboards(silent=silent)
-    return result
+    enqueue_background(background_tasks, force_refresh_all_user_keyboards, silent=silent)
+    return {"status": "accepted", "message": "Обновление клавиатур запущено в фоне"}
 
 @app.post("/bot/force-refresh-keyboards")
-async def force_refresh_keyboards_compat(request: Request):
+async def force_refresh_keyboards_compat(request: Request, background_tasks: BackgroundTasks):
     """Совместимость для прокси, который срезает префикс /api."""
     silent = True
     try:
@@ -736,8 +750,8 @@ async def force_refresh_keyboards_compat(request: Request):
     except Exception:
         pass
 
-    result = force_refresh_all_user_keyboards(silent=silent)
-    return result
+    enqueue_background(background_tasks, force_refresh_all_user_keyboards, silent=silent)
+    return {"status": "accepted", "message": "Обновление клавиатур запущено в фоне"}
 
 async def save_chat_id_handler(request: Request):
     """Общий обработчик для сохранения chat_id пользователя"""
@@ -817,7 +831,12 @@ async def try_direct_file_upload(file_info, file_name: str, order_id: int, user_
                         'chat_id': user_chat_id,
                         'caption': f"📎 {file_name} ({file_size / 1024 / 1024:.1f}MB)"
                     }
-                    response = requests.post(send_document_url, files=files, data=data, timeout=90)
+                    response = requests.post(
+                        send_document_url,
+                        files=files,
+                        data=data,
+                        timeout=(TELEGRAM_CONNECT_TIMEOUT, max(TELEGRAM_READ_TIMEOUT, 90))
+                    )
                     
                     if response.status_code == 200:
                         print(f"✅ Файл {file_name} отправлен напрямую")
@@ -833,7 +852,7 @@ async def try_direct_file_upload(file_info, file_name: str, order_id: int, user_
             return False
             
     except Exception as e:
-        print(f"❌ Ошибка альтернативного метода для {file_name}: {e}")
+        print(f"❌ Ошибка альтернативного метода для {file_name}: {sanitize_telegram_error(e)}")
         return False
 
 async def send_files_to_telegram_handler(request: Request):
@@ -888,14 +907,13 @@ async def send_files_to_telegram_handler(request: Request):
 📎 Отправляю файлы ({len(files)} шт.):
         """.strip()
         
-        telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         intro_payload = {
             'chat_id': user_chat_id,
             'text': intro_message,
             'parse_mode': 'HTML'
         }
         
-        requests.post(telegram_url, json=intro_payload, timeout=10)
+        post_telegram("sendMessage", intro_payload)
         
         # Отправляем каждый файл
         sent_count = 0
@@ -959,13 +977,14 @@ async def send_files_to_telegram_handler(request: Request):
                         'caption': f"📎 {file_name}"
                     }
                     
-                    response = requests.post(send_document_url, json=document_payload, timeout=60)
+                    response = post_telegram("sendDocument", document_payload)
                     
-                    if response.status_code == 200:
+                    if response is not None and response.status_code == 200:
                         print(f"✅ Файл {file_name} отправлен по URL")
                         success = True
                     else:
-                        print(f"⚠️ Не удалось отправить по URL: {response.text}")
+                        response_text = response.text if response is not None else "Telegram API недоступен"
+                        print(f"⚠️ Не удалось отправить по URL: {response_text}")
                         
                         # Последняя попытка - прямая отправка (если ещё не пробовали)
                         if isinstance(file_info, str):
@@ -1018,7 +1037,7 @@ async def send_files_to_telegram_handler(request: Request):
             'parse_mode': 'HTML'
         }
         
-        requests.post(telegram_url, json=final_payload, timeout=10)
+        post_telegram("sendMessage", final_payload)
         
         return {
             "status": "success" if sent_count > 0 else "partial_success" if sent_count == 0 and len(files) > 0 else "error",
