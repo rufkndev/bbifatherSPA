@@ -79,8 +79,6 @@ TELEGRAM_FORCE_IPV4 = os.getenv("TELEGRAM_FORCE_IPV4", "true").lower() == "true"
 TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "5"))
 TELEGRAM_READ_TIMEOUT = float(os.getenv("TELEGRAM_READ_TIMEOUT", "15"))
 TELEGRAM_GET_UPDATES_READ_TIMEOUT = float(os.getenv("TELEGRAM_GET_UPDATES_READ_TIMEOUT", "60"))
-TELEGRAM_SEND_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_SEND_CONNECT_TIMEOUT", "3"))
-TELEGRAM_SEND_READ_TIMEOUT = float(os.getenv("TELEGRAM_SEND_READ_TIMEOUT", "8"))
 TELEGRAM_SEND_RETRIES = max(1, int(os.getenv("TELEGRAM_SEND_RETRIES", "2")))
 TELEGRAM_SEND_RETRY_DELAY_SECONDS = max(0.5, float(os.getenv("TELEGRAM_SEND_RETRY_DELAY_SECONDS", "1")))
 BACKEND_FAILURE_COOLDOWN_SECONDS = max(0.0, float(os.getenv("BACKEND_FAILURE_COOLDOWN_SECONDS", "60")))
@@ -109,39 +107,23 @@ class BBIFatherBot:
 
     def build_application(self):
         builder = Application.builder().token(BOT_TOKEN).post_init(self.on_post_init)
-        builder = builder.request(self.create_telegram_request(
-            connect_timeout=TELEGRAM_SEND_CONNECT_TIMEOUT,
-            read_timeout=TELEGRAM_SEND_READ_TIMEOUT,
-            write_timeout=TELEGRAM_SEND_READ_TIMEOUT,
-            pool_timeout=TELEGRAM_SEND_CONNECT_TIMEOUT,
-        ))
-        builder = builder.get_updates_request(self.create_telegram_request(
-            connect_timeout=TELEGRAM_CONNECT_TIMEOUT,
-            read_timeout=TELEGRAM_GET_UPDATES_READ_TIMEOUT,
-            write_timeout=TELEGRAM_READ_TIMEOUT,
-            pool_timeout=TELEGRAM_CONNECT_TIMEOUT,
-        ))
+        builder = builder.request(self.create_telegram_request(read_timeout=TELEGRAM_READ_TIMEOUT))
+        builder = builder.get_updates_request(self.create_telegram_request(read_timeout=TELEGRAM_GET_UPDATES_READ_TIMEOUT))
         self.app = builder.build()
         self.setup_handlers()
         self.app.add_error_handler(self.handle_error)
 
-    def create_telegram_request(
-        self,
-        connect_timeout: float,
-        read_timeout: float,
-        write_timeout: float,
-        pool_timeout: float
-    ) -> HTTPXRequest:
+    def create_telegram_request(self, read_timeout: float) -> HTTPXRequest:
         """Создает Telegram HTTP client с timeouts под установленную версию PTB."""
         signature = inspect.signature(HTTPXRequest)
         supported_params = signature.parameters
         kwargs = {}
 
         for name, value in {
-            "connect_timeout": connect_timeout,
+            "connect_timeout": TELEGRAM_CONNECT_TIMEOUT,
             "read_timeout": read_timeout,
-            "write_timeout": write_timeout,
-            "pool_timeout": pool_timeout,
+            "write_timeout": TELEGRAM_READ_TIMEOUT,
+            "pool_timeout": TELEGRAM_CONNECT_TIMEOUT,
         }.items():
             if name in supported_params:
                 kwargs[name] = value

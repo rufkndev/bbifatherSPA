@@ -281,7 +281,7 @@ export const subjectsData: SubjectData[] = [
   {
     id: "scm-logistics",
     name: "Логистические системы и управление цепочками поставок (SCM)",
-    description: "ПР №1-6, ЛР №1-3, ИКР",
+    description: "ПР №1-6, ЛР №1-4, ИКР",
     basePrice: 1250,
     course: 3,
     semester: 6,
@@ -296,7 +296,8 @@ export const subjectsData: SubjectData[] = [
       { id: "scm-lr-1", title: "ЛР №1", price: 2500, estimatedDays: 3 },
       { id: "scm-lr-2", title: "ЛР №2", price: 2500, estimatedDays: 3 },
       { id: "scm-lr-3", title: "ЛР №3", price: 2500, estimatedDays: 3 },
-      { id: "scm-ikr", title: "ИКР", price: 1000, estimatedDays: 2 },
+      { id: "scm-lr-4", title: "ЛР №4", price: 2500, estimatedDays: 3 },
+      { id: "scm-ikr", title: "ИКР", price: 1500, estimatedDays: 2 },
       { id: "scm-individual", title: "Индивидуальное задание", estimatedDays: 3 }
     ]
   },
@@ -335,7 +336,7 @@ export const subjectsData: SubjectData[] = [
       { id: "hrcrm-hrm", title: "HRM", price: 2000, estimatedDays: 2 },
       { id: "hrcrm-srm", title: "SRM(Временно не работает)", price: 2000, estimatedDays: 2 },
       { id: "hrcrm-ecm", title: "ECM", price: 2000, estimatedDays: 2 },
-      { id: "hrcrm-ikr", title: "ИКР", price: 1000, estimatedDays: 2 },
+      { id: "hrcrm-ikr", title: "ИКР", price: 2000, estimatedDays: 2 },
       { id: "hrcrm-referat", title: "Реферат", price: 3000, estimatedDays: 3 },
       { id: "hrcrm-market-review", title: "Обзор рынка", price: 1250, estimatedDays: 2 }
     ]
@@ -390,6 +391,24 @@ export const subjectsData: SubjectData[] = [
       { id: "bds-pr-3", title: "ПР №3", price: 1500, estimatedDays: 3 },
       { id: "bds-pr-4", title: "ПР №4", price: 1500, estimatedDays: 3 },
       { id: "bds-group-project", title: "Групповой проект", price: 5000, estimatedDays: 7 }
+    ]
+  },
+  {
+    id: "knir-2",
+    name: "КНИР 2",
+    description: "Курсовая научно-исследовательская работа, 2 часть",
+    course: 3,
+    semester: 6,
+    works: [
+      { id: "knir2-task", title: "Постановка задачи исследования", price: 1000 },
+      { id: "knir2-pr1", title: "1. Разработка системы управления качеством, эффективностью и стратегией", price: 1000 },
+      { id: "knir2-pr2", title: "2 Исследование предметных областей CRM, HRM, SRM и уровня их автоматизации", price: 1000 },
+      { id: "knir2-pr3", title: "3. Анализ логистического процесса предприятия", price: 1000 },
+      { id: "knir2-pr4", title: "4. Анализ характеристик модели и узких мест бизнес-процесса «Как есть»", price: 2000 },
+      { id: "knir2-pr5", title: "5. Разработка требований к проектному решению", price: 1000 },
+      { id: "knir2-pr6", title: "6. Постановка и решение многокритериальной задачи выбора оптимального проектного решения", price: 1500 },
+      { id: "knir2-pr7", title: "7. Разработка архитектурной модели бизнес-процесса «Как будет»", price: 2000 },
+      { id: "knir2-final", title: "Итоговый отчет", price: 1000 }
     ]
   }
 ];
