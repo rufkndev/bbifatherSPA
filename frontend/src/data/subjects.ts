@@ -144,6 +144,25 @@ export const subjectsData: SubjectData[] = [
       { id: "dem-ikr", title: "ИКР", price: 1000, estimatedDays: 2 }
     ]
   },
+  {
+    id: "summer-practice",
+    name: "Летняя практика",
+    description: "Итоговый отчет, план проекта исследования ВКР, практические работы",
+    basePrice: 1000,
+    course: 2,
+    semester: 4,
+    fullCourseDiscount: 5,
+    works: [
+      { id: "summer-practice-final-report", title: "Итоговый отчет", price: 1000, estimatedDays: 2 },
+      { id: "summer-practice-vkr-project-plan", title: "Разработка плана проекта исследования ВКР", price: 1000, estimatedDays: 2 },
+      { id: "summer-practice-enterprise-system-analysis", title: "1. Системный анализ предприятия", price: 1000, estimatedDays: 2 },
+      { id: "summer-practice-production-structure-analysis", title: "1.4-1.6 Анализ производственной структуры предприятия", price: 1500, estimatedDays: 2 },
+      { id: "summer-practice-process-management", title: "2. Процессное управление предприятием", price: 1500, estimatedDays: 2 },
+      { id: "summer-practice-archi-modeling", title: "3. Архитектурное моделирование в среде Archi", price: 1500, estimatedDays: 2 },
+      { id: "summer-practice-uml-modeling", title: "4. Концептуальное моделирование предметной области в UML", price: 1500, estimatedDays: 2 },
+      { id: "summer-practice-python-db-visualization", title: "7. Разработка базы данных бизнес-процесса и визуализация средствами Python", price: 1250, estimatedDays: 2 }
+    ]
+  },
 
   // 3 курс, 5 семестр
   {
