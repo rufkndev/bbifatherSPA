@@ -20,12 +20,38 @@
 - Ubuntu 20.04+ или CentOS 8+
 - Минимум 1GB RAM, 1 CPU
 - Доступ по SSH
-- Доменное имя (например, `bbifather.ru`)
+- Доменное имя `bbifather.site`
 
 ### Локальная машина
 - Node.js 18+
 - Git
 - SSH доступ к серверу
+
+## 🔁 Перенос на `bbifather.site`
+
+Выполняйте переключение только после резервной копии. Старый домен не нужен для
+бота: он использует long polling, а не Telegram webhook.
+
+```bash
+# На сервере: сохраните состояние до изменений
+DATE=$(date +%Y%m%d_%H%M%S)
+mkdir -p "/home/bbifather/backups/$DATE"
+sudo cp /etc/nginx/sites-available/bbifather "/home/bbifather/backups/$DATE/" 2>/dev/null || true
+cp /home/bbifather/bbifatherSPA/.env "/home/bbifather/backups/$DATE/.env" 2>/dev/null || true
+pm2 status
+pm2 logs --lines 100
+```
+
+1. В DNS создайте A-запись `bbifather.site` на публичный IP сервера.
+2. Убедитесь, что `dig +short bbifather.site` возвращает этот IP и что порты
+   80/443 доступны.
+3. Разверните конфигурацию Nginx и сертификат из разделов ниже.
+4. В корневом `.env` обновите `FRONTEND_URLS`, `PUBLIC_BASE_URL` и
+   `WEB_APP_URL` на `https://bbifather.site`.
+5. В BotFather обновите URL Menu Button / Mini App на
+   `https://bbifather.site`, затем перезапустите `bbifather-bot`.
+6. После проверки отзовите прежний Telegram token и Supabase key, если они
+   когда-либо попадали в документацию или Git.
 
 ## 🗃️ Настройка Supabase
 
@@ -255,25 +281,28 @@ pip install -r requirements.txt
 ### 5. Настройка переменных окружения
 
 ```bash
-# Создаем .env файл
+# Backend читает .env из корня проекта, а не из backend/
+cd ..
+cp .env.example .env
 nano .env
+cd backend
 ```
 
-Содержимое `.env`:
+Заполните значения из Supabase и BotFather. Не храните секреты в документации
+или Git.
 
 ```env
-# Supabase настройки
-SUPABASE_URL=https://yvtobwpaxdgvvobhaymq.supabase.co
-SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2dG9id3BheGRndnZvYmhheW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzMDg5MTksImV4cCI6MjA2OTg4NDkxOX0.yrfE7RBIoMfrhRWD2ptU9pyerTvxwXHW_y6V3FzNi80
+# Публичный URL Mini App
+FRONTEND_URLS=https://bbifather.site
+PUBLIC_BASE_URL=https://bbifather.site
+WEB_APP_URL=https://bbifather.site
+BOT_API_BASE_URL=http://127.0.0.1:8000/api
 
-# Telegram Bot настройки (опционально)
-TELEGRAM_BOT_TOKEN=7582178055:AAFcTdIt3g1LiJ-6-W0QDR1p1MPm9LkSFCY
-TELEGRAM_CHAT_ID=814032949
-# Отдельный чат для уведомлений по предмету ERP (можно изменить)
-TELEGRAM_ERP_CHAT_ID=814032949
-
-# Frontend URLs для CORS
-FRONTEND_URLS=https://bbifather.ru,https://www.bbifather.ru
+# Секреты заполняются вручную и не попадают в Git
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=replace_with_supabase_key
+TELEGRAM_BOT_TOKEN=replace_with_new_bot_token
+TELEGRAM_CHAT_ID=replace_with_admin_chat_id
 
 # Режим работы
 ENVIRONMENT=production
@@ -326,6 +355,38 @@ pm2 save
 pm2 startup
 ```
 
+### 8. Настройка PM2 для polling-бота
+
+Бот использует long polling, поэтому он запускается отдельным процессом. Не
+запускайте его через `python bot.py &`: после SSH-disconnect или перезагрузки
+сервера он остановится.
+
+```bash
+cat > /home/bbifather/bbifatherSPA/ecosystem.bot.config.js << 'EOF'
+module.exports = {
+  apps: [{
+    name: 'bbifather-bot',
+    script: 'bot.py',
+    cwd: '/home/bbifather/bbifatherSPA',
+    interpreter: '/home/bbifather/bbifatherSPA/backend/venv/bin/python',
+    instances: 1,
+    autorestart: true,
+    max_restarts: 10,
+    restart_delay: 3000,
+    error_file: '/home/bbifather/logs/bot-error.log',
+    out_file: '/home/bbifather/logs/bot-out.log',
+    time: true
+  }]
+};
+EOF
+
+pm2 start /home/bbifather/bbifatherSPA/ecosystem.bot.config.js
+pm2 save
+```
+
+Убедитесь, что запущен ровно один экземпляр `bbifather-bot`: несколько polling
+процессов с одним токеном конфликтуют за updates.
+
 ## 🎨 Деплой Frontend
 
 ### 1. Переход в директорию frontend
@@ -336,12 +397,9 @@ cd /home/bbifather/bbifatherSPA/frontend
 
 ### 2. Настройка API URL
 
-Отредактируйте `src/api.ts`:
-
-```typescript
-// Замените localhost на ваш домен
-const API_BASE_URL = 'https://bbifather.ru/api';
-```
+Фронтенд использует текущий origin как API URL, поэтому при работе за Nginx
+ручная правка `src/api.ts` не требуется. Перед сборкой при необходимости
+задайте `REACT_APP_API_BASE_URL=https://bbifather.site`.
 
 ### 3. Установка зависимостей и сборка
 
@@ -349,7 +407,6 @@ const API_BASE_URL = 'https://bbifather.ru/api';
 npm install
 npm run build
 ```
-dMa87H_?+yU2bP
 ### 4. Перемещение build в nginx директорию
 
 ```bash
@@ -363,25 +420,19 @@ sudo chown -R www-data:www-data /var/www/bbifather
 ### 1. Создание конфигурации Nginx
 
 ```bash
-sudo nano /etc/nginx/sites-available/bbifather
+sudo cp /home/bbifather/bbifatherSPA/deploy/nginx-bbifather.site.conf \
+  /etc/nginx/sites-available/bbifather
 ```
 
-Содержимое конфигурации:
+Шаблон уже содержит конфигурацию для `bbifather.site`. При необходимости
+сравните его с текущей конфигурацией:
 
 ```nginx
-# Перенаправление с www на без www
-server {
-    listen 80;
-    listen [::]:80;
-    server_name www.bbifather.ru;
-    return 301 http://bbifather.ru$request_uri;
-}
-
 # Основной сервер
 server {
     listen 80;
     listen [::]:80;
-    server_name bbifather.ru;
+    server_name bbifather.site;
 
     # Логи
     access_log /var/log/nginx/bbifather_access.log;
@@ -419,7 +470,9 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
-        proxy_read_timeout 86400;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
     }
 
     # Обработка React Router (SPA)
@@ -468,7 +521,7 @@ sudo systemctl enable nginx
 ### 1. Получение SSL сертификата через Let's Encrypt
 
 ```bash
-sudo certbot --nginx -d bbifather.ru -d www.bbifather.ru
+sudo certbot --nginx -d bbifather.site --redirect
 ```
 
 ### 2. Автоматическое обновление сертификата
@@ -531,7 +584,7 @@ pm2 restart bbifather-backend
 Сделайте POST запрос на `/api/test-notification`:
 
 ```bash
-curl -X POST https://bbifather.ru/api/test-notification
+curl -X POST https://bbifather.site/api/test-notification
 ```
 
 ## 📊 Мониторинг и обслуживание
@@ -672,8 +725,8 @@ sudo certbot renew --dry-run
 
 После завершения всех шагов проверьте:
 
-1. ✅ Frontend доступен по адресу `https://bbifather.ru`
-2. ✅ API отвечает: `https://bbifather.ru/api/subjects`
+1. ✅ Frontend доступен по адресу `https://bbifather.site`
+2. ✅ API отвечает: `https://bbifather.site/api/subjects`
 3. ✅ SSL сертификат работает (зеленый замок в браузере)
 4. ✅ Telegram уведомления приходят при создании заказа
 5. ✅ PM2 показывает, что backend запущен: `pm2 status`

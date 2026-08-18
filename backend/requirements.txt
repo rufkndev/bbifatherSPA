@@ -1,0 +1,7 @@
+fastapi
+gunicorn
+python-dotenv
+python-telegram-bot
+requests
+supabase
+uvicorn[standard]

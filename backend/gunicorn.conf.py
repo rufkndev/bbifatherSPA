@@ -1,9 +1,9 @@
 # Gunicorn конфигурация для продакшена
-import multiprocessing
-
 # Сервер
 bind = "0.0.0.0:8000"
-workers = multiprocessing.cpu_count() * 2 + 1
+# Очередь Telegram хранится в памяти процесса. Несколько Gunicorn worker'ов
+# создают несколько независимых очередей и легко превышают лимиты одного bot token.
+workers = 1
 worker_class = "uvicorn.workers.UvicornWorker"
 worker_connections = 1000
 timeout = 120

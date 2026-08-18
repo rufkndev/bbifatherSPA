@@ -2,7 +2,9 @@ import axios from 'axios';
 import { Order, Subject, CreateOrderRequest, OrderListResponse, Student } from './types';
 
 const normalizeApiBaseUrl = (rawUrl?: string): string => {
-  const fallbackUrl = 'https://bbifather.ru';
+  // В production API обслуживается тем же origin через Nginx (/api).
+  // Это исключает привязку собранного Mini App к конкретному домену.
+  const fallbackUrl = window.location.origin;
   const cleanedUrl = (rawUrl || fallbackUrl).trim().replace(/\/+$/, '');
   return cleanedUrl.endsWith('/api') ? cleanedUrl.slice(0, -4) : cleanedUrl;
 };
@@ -11,6 +13,7 @@ const API_BASE_URL = normalizeApiBaseUrl(process.env.REACT_APP_API_BASE_URL);
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: Number(process.env.REACT_APP_API_TIMEOUT_MS || 10000),
   headers: {
     'Content-Type': 'application/json',
   },

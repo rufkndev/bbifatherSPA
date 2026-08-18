@@ -59,11 +59,16 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Настройка CORS
-FRONTEND_URLS = os.getenv("FRONTEND_URLS", "http://localhost:3000").split(",")
+# Настройка CORS. В production список должен задаваться через .env, без
+# устаревших доменов в исходном коде.
+FRONTEND_URLS = [
+    url.strip().rstrip("/")
+    for url in os.getenv("FRONTEND_URLS", "https://bbifather.site").split(",")
+    if url.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=FRONTEND_URLS + ["https://bbifather.ru", "https://www.bbifather.ru"],
+    allow_origins=FRONTEND_URLS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -153,9 +158,10 @@ PAYMENT_METHODS = {
     },
 }
 
-# URL для публичного доступа к файлам (для Telegram Bot API)
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://bbifather.ru")
-WEB_APP_URL = os.getenv("WEB_APP_URL", "https://bbifather.ru")
+# URL для публичного доступа к файлам и Telegram Mini App.
+# В production их необходимо задать явно в корневом .env.
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://bbifather.site").rstrip("/")
+WEB_APP_URL = os.getenv("WEB_APP_URL", "https://bbifather.site").rstrip("/")
 
 print(f"🔗 PUBLIC_BASE_URL: {PUBLIC_BASE_URL}")
 
@@ -791,9 +797,12 @@ async def save_chat_id_handler(request: Request):
             raise HTTPException(status_code=400, detail="Не указан telegram_username или chat_id")
         
         # Находим студента по telegram username
-        existing_student = find_student_by_telegram(telegram_username, fields="id")
+        existing_student = find_student_by_telegram(telegram_username, fields="id,chat_id")
         
         if existing_student:
+            if str(existing_student.get("chat_id") or "") == str(chat_id):
+                return {"status": "success", "message": "Chat ID уже актуален"}
+
             # Обновляем существующего студента
             student_id = existing_student['id']
             supabase.table('students').update({

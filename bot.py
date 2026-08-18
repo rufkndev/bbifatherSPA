@@ -62,7 +62,7 @@ ADMIN_USERNAMES: List[str] = [u.strip().lstrip('@').lower() for u in os.getenv("
 ADMIN_DYNAMIC_CHAT_IDS: Set[str] = set()
 # Username для отображения в /support
 SUPPORT_USERNAME = os.getenv("TELEGRAM_SUPPORT_USERNAME", "artemonsup")
-WEB_APP_URL = os.getenv("WEB_APP_URL", "https://bbifather.ru")
+WEB_APP_URL = os.getenv("WEB_APP_URL", "https://bbifather.site")
 # Бот и backend обычно работают на одном сервере. Локальный адрес не зависит от nginx
 # и не ловит 502, пока публичный frontend еще поднимается.
 API_BASE_URL = (
@@ -77,11 +77,12 @@ FORCE_REFRESH_STARTUP_DELAY_SECONDS = float(os.getenv("FORCE_REFRESH_STARTUP_DEL
 UPDATE_BOT_COMMANDS_ON_STARTUP = os.getenv("UPDATE_BOT_COMMANDS_ON_STARTUP", "false").lower() == "true"
 TELEGRAM_FORCE_IPV4 = os.getenv("TELEGRAM_FORCE_IPV4", "true").lower() == "true"
 TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "5"))
-TELEGRAM_READ_TIMEOUT = float(os.getenv("TELEGRAM_READ_TIMEOUT", "15"))
+TELEGRAM_READ_TIMEOUT = float(os.getenv("TELEGRAM_READ_TIMEOUT", "8"))
 TELEGRAM_GET_UPDATES_READ_TIMEOUT = float(os.getenv("TELEGRAM_GET_UPDATES_READ_TIMEOUT", "60"))
-TELEGRAM_SEND_RETRIES = max(1, int(os.getenv("TELEGRAM_SEND_RETRIES", "2")))
+TELEGRAM_SEND_RETRIES = max(1, int(os.getenv("TELEGRAM_SEND_RETRIES", "1")))
 TELEGRAM_SEND_RETRY_DELAY_SECONDS = max(0.5, float(os.getenv("TELEGRAM_SEND_RETRY_DELAY_SECONDS", "1")))
 BACKEND_FAILURE_COOLDOWN_SECONDS = max(0.0, float(os.getenv("BACKEND_FAILURE_COOLDOWN_SECONDS", "60")))
+CHAT_ID_SYNC_TTL_SECONDS = max(0.0, float(os.getenv("CHAT_ID_SYNC_TTL_SECONDS", "3600")))
 BOT_START_MAX_RETRIES = max(1, int(os.getenv("BOT_START_MAX_RETRIES", "8")))
 BOT_START_RETRY_DELAY_SECONDS = max(1.0, float(os.getenv("BOT_START_RETRY_DELAY_SECONDS", "5")))
 BOT_BOOTSTRAP_RETRIES = int(os.getenv("BOT_BOOTSTRAP_RETRIES", "10"))
@@ -104,6 +105,7 @@ class BBIFatherBot:
         self.app: Optional[Application] = None
         self._is_running = False
         self._backend_unavailable_until = 0.0
+        self._chat_id_sync_cache: dict[str, tuple[str, float]] = {}
 
     def build_application(self):
         builder = Application.builder().token(BOT_TOKEN).post_init(self.on_post_init)
@@ -214,7 +216,7 @@ class BBIFatherBot:
             logger.error(f"❌ Ошибка добавления admin chat_id: {e}")
 
     async def reply_text_safely(self, update: Update, text: str, **kwargs) -> bool:
-        """Отправляет ответ пользователю с retry на сетевые сбои Telegram API."""
+        """Отправляет интерактивный ответ без блокирующих повторов по умолчанию."""
         message = update.effective_message
         if not message:
             logger.warning("⚠️ Невозможно ответить: в update нет сообщения")
@@ -420,6 +422,16 @@ class BBIFatherBot:
         if not user.username:
             logger.warning(f"У пользователя {user.first_name} (ID: {user.id}) нет username")
             return
+
+        cache_key = str(user.id)
+        cache_value = f"{user.username.lower()}:{user.id}"
+        cached_value, cached_at = self._chat_id_sync_cache.get(cache_key, ("", 0.0))
+        if (
+            cached_value == cache_value
+            and CHAT_ID_SYNC_TTL_SECONDS > 0
+            and time.monotonic() - cached_at < CHAT_ID_SYNC_TTL_SECONDS
+        ):
+            return
             
         try:
             full_url = f"{self.get_api_base_url()}/save-chat-id"
@@ -441,6 +453,7 @@ class BBIFatherBot:
                 return
 
             if response.status_code == 200:
+                self._chat_id_sync_cache[cache_key] = (cache_value, time.monotonic())
                 logger.info(f"✅ Chat ID сохранен для @{user.username}")
             else:
                 logger.warning(f"⚠️ Не удалось сохранить chat_id: {response.text}")
@@ -546,12 +559,9 @@ class BBIFatherBot:
         
         # Обработка кнопок меню
         if message_text in ("📱 Открыть мини-апп", "📱 Открыть приложение", "📥 Скачать файлы"):
-            await self.reply_text_safely(
-                update,
-                "Используйте кнопку `📱 Открыть мини-апп` в меню, чтобы открыть актуальную версию сервиса.",
-                reply_markup=self.get_main_keyboard(user.username),
-                parse_mode='Markdown'
-            )
+            # ReplyKeyboard с WebAppInfo открывает Mini App на клиенте Telegram
+            # самостоятельно; дополнительное сообщение только создаёт лишний API-запрос.
+            return
         elif message_text == "📋 Правила":
             await self.send_rules(update, context)
         elif message_text == "💬 Техподдержка":
