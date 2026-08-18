@@ -79,6 +79,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_FORCE_IPV4 = os.getenv("TELEGRAM_FORCE_IPV4", "true").lower() == "true"
+TELEGRAM_PROXY_URL = os.getenv("TELEGRAM_PROXY_URL", "").strip()
 TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "5"))
 TELEGRAM_READ_TIMEOUT = float(os.getenv("TELEGRAM_READ_TIMEOUT", "20"))
 TELEGRAM_SEND_RETRIES = max(1, int(os.getenv("TELEGRAM_SEND_RETRIES", "2")))
@@ -194,17 +195,24 @@ def build_main_reply_keyboard(telegram_username: Optional[str] = None) -> dict:
     }
 
 def sanitize_telegram_error(error: Exception) -> str:
-    """Убирает токен бота из текстов сетевых ошибок."""
+    """Убирает токен бота и URL proxy из текстов сетевых ошибок."""
     message = str(error)
     if BOT_TOKEN:
         message = message.replace(BOT_TOKEN, "***")
+    if TELEGRAM_PROXY_URL:
+        message = message.replace(TELEGRAM_PROXY_URL, "***")
     return message
 
 def get_telegram_session() -> requests.Session:
-    """Переиспользует HTTP-соединение к Telegram в рамках текущего потока."""
+    """Переиспользует соединение и направляет только Telegram через proxy."""
     session = getattr(TELEGRAM_SESSION_LOCAL, "session", None)
     if session is None:
         session = requests.Session()
+        if TELEGRAM_PROXY_URL:
+            session.proxies.update({
+                "http": TELEGRAM_PROXY_URL,
+                "https": TELEGRAM_PROXY_URL,
+            })
         TELEGRAM_SESSION_LOCAL.session = session
     return session
 

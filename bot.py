@@ -76,6 +76,7 @@ FORCE_REFRESH_BOT_USERS_ON_STARTUP = False
 FORCE_REFRESH_STARTUP_DELAY_SECONDS = float(os.getenv("FORCE_REFRESH_STARTUP_DELAY_SECONDS", "3"))
 UPDATE_BOT_COMMANDS_ON_STARTUP = os.getenv("UPDATE_BOT_COMMANDS_ON_STARTUP", "false").lower() == "true"
 TELEGRAM_FORCE_IPV4 = os.getenv("TELEGRAM_FORCE_IPV4", "true").lower() == "true"
+TELEGRAM_PROXY_URL = os.getenv("TELEGRAM_PROXY_URL", "").strip()
 TELEGRAM_CONNECT_TIMEOUT = float(os.getenv("TELEGRAM_CONNECT_TIMEOUT", "5"))
 TELEGRAM_READ_TIMEOUT = float(os.getenv("TELEGRAM_READ_TIMEOUT", "8"))
 TELEGRAM_GET_UPDATES_READ_TIMEOUT = float(os.getenv("TELEGRAM_GET_UPDATES_READ_TIMEOUT", "60"))
@@ -116,7 +117,7 @@ class BBIFatherBot:
         self.app.add_error_handler(self.handle_error)
 
     def create_telegram_request(self, read_timeout: float) -> HTTPXRequest:
-        """Создает Telegram HTTP client с timeouts под установленную версию PTB."""
+        """Создает Telegram HTTP client с timeout и опциональным proxy."""
         signature = inspect.signature(HTTPXRequest)
         supported_params = signature.parameters
         kwargs = {}
@@ -130,10 +131,22 @@ class BBIFatherBot:
             if name in supported_params:
                 kwargs[name] = value
 
+        if TELEGRAM_PROXY_URL:
+            # PTB менял имя аргумента между версиями, поэтому поддерживаем оба.
+            if "proxy" in supported_params:
+                kwargs["proxy"] = TELEGRAM_PROXY_URL
+            elif "proxy_url" in supported_params:
+                kwargs["proxy_url"] = TELEGRAM_PROXY_URL
+            else:
+                logger.warning("⚠️ Эта версия python-telegram-bot не поддерживает настройку proxy")
+
         return HTTPXRequest(**kwargs)
 
     async def on_post_init(self, application: Application):
         """Действия сразу после запуска приложения."""
+        if TELEGRAM_PROXY_URL:
+            logger.info("🌐 Telegram API использует настроенный proxy")
+
         if UPDATE_BOT_COMMANDS_ON_STARTUP:
             try:
                 await application.bot.set_my_commands([

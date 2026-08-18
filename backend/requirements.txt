@@ -1,7 +1,8 @@
 fastapi
 gunicorn
+httpx[socks]
 python-dotenv
 python-telegram-bot
-requests
+requests[socks]
 supabase
 uvicorn[standard]
