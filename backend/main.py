@@ -203,15 +203,22 @@ def sanitize_telegram_error(error: Exception) -> str:
         message = message.replace(TELEGRAM_PROXY_URL, "***")
     return message
 
+def get_telegram_proxy_url() -> str:
+    """Переключает SOCKS5 на DNS-разрешение через proxy для Telegram API."""
+    if TELEGRAM_PROXY_URL.startswith("socks5://"):
+        return f"socks5h://{TELEGRAM_PROXY_URL[len('socks5://'):]}"
+    return TELEGRAM_PROXY_URL
+
 def get_telegram_session() -> requests.Session:
     """Переиспользует соединение и направляет только Telegram через proxy."""
     session = getattr(TELEGRAM_SESSION_LOCAL, "session", None)
     if session is None:
         session = requests.Session()
-        if TELEGRAM_PROXY_URL:
+        proxy_url = get_telegram_proxy_url()
+        if proxy_url:
             session.proxies.update({
-                "http": TELEGRAM_PROXY_URL,
-                "https": TELEGRAM_PROXY_URL,
+                "http": proxy_url,
+                "https": proxy_url,
             })
         TELEGRAM_SESSION_LOCAL.session = session
     return session

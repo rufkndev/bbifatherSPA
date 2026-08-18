@@ -98,6 +98,12 @@ if TELEGRAM_FORCE_IPV4:
 
     socket.getaddrinfo = _telegram_ipv4_getaddrinfo
 
+def get_telegram_proxy_url() -> str:
+    """Использует DNS-разрешение SOCKS-прокси, а не заблокированный маршрут VPS."""
+    if TELEGRAM_PROXY_URL.startswith("socks5://"):
+        return f"socks5h://{TELEGRAM_PROXY_URL[len('socks5://'):]}"
+    return TELEGRAM_PROXY_URL
+
 if not BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN не задан в .env файле!")
 
@@ -131,12 +137,13 @@ class BBIFatherBot:
             if name in supported_params:
                 kwargs[name] = value
 
-        if TELEGRAM_PROXY_URL:
+        proxy_url = get_telegram_proxy_url()
+        if proxy_url:
             # PTB менял имя аргумента между версиями, поэтому поддерживаем оба.
             if "proxy" in supported_params:
-                kwargs["proxy"] = TELEGRAM_PROXY_URL
+                kwargs["proxy"] = proxy_url
             elif "proxy_url" in supported_params:
-                kwargs["proxy_url"] = TELEGRAM_PROXY_URL
+                kwargs["proxy_url"] = proxy_url
             else:
                 logger.warning("⚠️ Эта версия python-telegram-bot не поддерживает настройку proxy")
 
