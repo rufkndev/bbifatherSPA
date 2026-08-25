@@ -56,6 +56,9 @@ ADMIN_CHAT_IDS: List[str] = parse_chat_ids(
     ADMIN_CHAT_ID,
     "814032949,8296182614"
 )
+# Команда рассылки должна быть доступна только владельцу бота, даже если в
+# TELEGRAM_ADMIN_CHAT_IDS добавлены другие технические аккаунты.
+MENU_REFRESH_ADMIN_ID = 814032949
 # Поддержка списка админов по username (для авто-обнаружения chat_id при первом сообщении боту)
 ADMIN_USERNAMES: List[str] = [u.strip().lstrip('@').lower() for u in os.getenv("TELEGRAM_ADMIN_USERNAMES", "artemonnnnnnn,artemonsup").split(",") if u.strip()]
 # Динамически собранные chat_id админов, которые писали боту
@@ -113,6 +116,7 @@ class BBIFatherBot:
         self._is_running = False
         self._backend_unavailable_until = 0.0
         self._chat_id_sync_cache: dict[str, tuple[str, float]] = {}
+        self._menu_refresh_task: Optional[asyncio.Task] = None
 
     def build_application(self):
         builder = Application.builder().token(BOT_TOKEN).post_init(self.on_post_init)
@@ -204,7 +208,14 @@ class BBIFatherBot:
         if BACKEND_FAILURE_COOLDOWN_SECONDS > 0:
             self._backend_unavailable_until = time.monotonic() + BACKEND_FAILURE_COOLDOWN_SECONDS
 
-    async def post_to_backend(self, url: str, json_payload: dict, timeout: float, action: str) -> Optional[requests.Response]:
+    async def post_to_backend(
+        self,
+        url: str,
+        json_payload: dict,
+        timeout: float,
+        action: str,
+        headers: Optional[dict] = None,
+    ) -> Optional[requests.Response]:
         """Выполняет POST в backend без влияния на обработку Telegram-сообщений."""
         if self.backend_sync_is_paused():
             logger.warning(f"⏸️ Backend недоступен, пропускаем действие '{action}' до следующей попытки")
@@ -215,7 +226,8 @@ class BBIFatherBot:
                 requests.post,
                 url,
                 json=json_payload,
-                timeout=timeout
+                timeout=timeout,
+                headers=headers,
             )
         except requests.exceptions.RequestException as e:
             self.pause_backend_sync()
@@ -276,42 +288,88 @@ class BBIFatherBot:
             return
         logger.exception("❌ Необработанная ошибка в Telegram-обработчике", exc_info=error)
 
-    async def force_refresh_all_users_keyboards(self):
-        """Принудительное обновление клавиатуры для всех пользователей в базе."""
+    async def force_refresh_all_users_keyboards(self) -> dict:
+        """Запрашивает у backend рассылку новой клавиатуры всем chat_id из базы."""
         refresh_urls = [
             f"{self.get_api_base_url()}/bot/force-refresh-keyboards",
-            f"{self.get_backend_root_url()}/api/bot/force-refresh-keyboards"
+            f"{self.get_backend_root_url()}/api/bot/force-refresh-keyboards",
         ]
-        # Убираем дубликаты URL
         refresh_urls = list(dict.fromkeys(refresh_urls))
-        logger.info(f"♻️ Принудительное обновление меню пользователей: {refresh_urls[0]}")
+        headers = {"X-Bot-Internal-Token": BOT_TOKEN}
 
-        max_attempts = 2
-        for attempt in range(1, max_attempts + 1):
-            for refresh_url in refresh_urls:
-                try:
-                    response = await self.post_to_backend(
-                        refresh_url,
-                        {"silent": True},
-                        20,
-                        "force-refresh-keyboards"
+        for refresh_url in refresh_urls:
+            response = await self.post_to_backend(
+                refresh_url,
+                {"silent": True},
+                3600,
+                "force-refresh-keyboards",
+                headers=headers,
+            )
+            if response is None:
+                continue
+            if response.status_code != 200:
+                logger.warning(
+                    f"⚠️ Не удалось обновить меню через {refresh_url}: "
+                    f"{response.status_code} {response.text}"
+                )
+                continue
+
+            result = response.json()
+            if result.get("status") == "completed":
+                return result
+            raise RuntimeError(f"Backend вернул неожиданный ответ: {result}")
+
+        raise RuntimeError("Backend не ответил на запрос обновления меню")
+
+    async def refresh_menu_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Запускает одноразовую рассылку новой клавиатуры по команде владельца."""
+        user = update.effective_user
+        if not user or user.id != MENU_REFRESH_ADMIN_ID:
+            logger.warning(
+                f"⛔ Попытка запуска /refresh_menu от Telegram ID "
+                f"{user.id if user else 'unknown'}"
+            )
+            return
+
+        if self._menu_refresh_task and not self._menu_refresh_task.done():
+            await self.reply_text_safely(
+                update,
+                "⏳ Рассылка обновления меню уже выполняется.",
+            )
+            return
+
+        async def run_refresh():
+            try:
+                result = await self.force_refresh_all_users_keyboards()
+                report = (
+                    "✅ Обновление меню завершено.\n\n"
+                    f"Всего: {result['total']}\n"
+                    f"Обновлено: {result['sent']}\n"
+                    f"Заблокировали бота: {result['blocked']}\n"
+                    f"Ошибок: {result['failed']}"
+                )
+                if self.app:
+                    await self.app.bot.send_message(
+                        chat_id=MENU_REFRESH_ADMIN_ID,
+                        text=report,
+                        disable_notification=True,
                     )
-                    if response is None:
-                        continue
-                    if response.status_code == 200:
-                        logger.info(f"✅ Обновление меню выполнено: {response.text}")
-                        return
-                    logger.warning(
-                        f"⚠️ Попытка {attempt}/{max_attempts}: не удалось обновить меню пользователей через {refresh_url}: "
-                        f"{response.status_code} {response.text}"
+            except Exception as error:
+                logger.exception(f"❌ Массовое обновление меню завершилось ошибкой: {error}")
+                if self.app:
+                    await self.app.bot.send_message(
+                        chat_id=MENU_REFRESH_ADMIN_ID,
+                        text=f"❌ Не удалось запустить обновление меню: {error}",
+                        disable_notification=True,
                     )
-                except Exception as e:
-                    logger.error(f"❌ Попытка {attempt}/{max_attempts}: ошибка обновления меню пользователей через {refresh_url}: {e}")
+            finally:
+                self._menu_refresh_task = None
 
-            if attempt < max_attempts:
-                await asyncio.sleep(min(2 * attempt, 10))
-
-        logger.error("❌ Не удалось выполнить принудительное обновление меню после всех попыток")
+        self._menu_refresh_task = asyncio.create_task(run_refresh())
+        await self.reply_text_safely(
+            update,
+            "⏳ Рассылка новой клавиатуры запущена. По завершении отправлю отчёт.",
+        )
 
     def setup_handlers(self):
         """Настройка обработчиков команд и сообщений"""
@@ -323,6 +381,7 @@ class BBIFatherBot:
         self.app.add_handler(CommandHandler("rules", self.rules_command))
         self.app.add_handler(CommandHandler("support", self.support_command))
         self.app.add_handler(CommandHandler("id", self.id_command))
+        self.app.add_handler(CommandHandler("refresh_menu", self.refresh_menu_command))
         
         # Обработчик текстовых сообщений (включая кнопки меню)
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))

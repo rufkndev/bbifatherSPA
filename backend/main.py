@@ -2,6 +2,7 @@ import json
 import html
 import os
 import re
+import secrets
 import shutil
 import socket
 import zipfile
@@ -756,10 +757,92 @@ def notify_executors_board_entry(order: dict):
     except Exception as e:
         print(f"⚠️ Ошибка отправки уведомления исполнителям: {e}")
 
+def verify_internal_bot_request(request: Request) -> None:
+    """Разрешает массовую рассылку только локальному процессу Telegram-бота."""
+    provided_token = request.headers.get("X-Bot-Internal-Token", "")
+    if not BOT_TOKEN or not provided_token or not secrets.compare_digest(provided_token, BOT_TOKEN):
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+
+def get_all_user_keyboard_targets() -> List[dict]:
+    """Получает уникальные chat_id пользователей с сохранением username для URL."""
+    if not supabase:
+        raise RuntimeError("Supabase клиент не инициализирован")
+
+    page_size = 1000
+    offset = 0
+    targets: List[dict] = []
+    seen_chat_ids = set()
+
+    while True:
+        response = (
+            supabase.table("students")
+            .select("chat_id,telegram")
+            .order("id")
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
+        rows = response.data or []
+
+        for row in rows:
+            chat_id = normalize_chat_id(row.get("chat_id"))
+            if not chat_id or chat_id in seen_chat_ids:
+                continue
+            seen_chat_ids.add(chat_id)
+            telegram_username = row.get("telegram")
+            targets.append({
+                "chat_id": chat_id,
+                "telegram": telegram_username if isinstance(telegram_username, str) else None,
+            })
+
+        if len(rows) < page_size:
+            break
+        offset += len(rows)
+
+    return targets
+
 def force_refresh_all_user_keyboards(silent: bool = True) -> dict:
-    """Принудительно отправляет всем пользователям актуальную клавиатуру."""
-    print("ℹ️ Массовое обновление клавиатур отключено")
-    return {"status": "skipped", "reason": "keyboard refresh disabled"}
+    """Отправляет всем пользователям актуальную клавиатуру и продолжает после ошибок."""
+    targets = get_all_user_keyboard_targets()
+    result = {"status": "completed", "total": len(targets), "sent": 0, "blocked": 0, "failed": 0}
+    print(f"♻️ Запущено обновление клавиатур для {result['total']} пользователей")
+
+    for index, target in enumerate(targets, start=1):
+        payload = {
+            "chat_id": target["chat_id"],
+            "text": (
+                "🔄 Меню бота обновлено.\n\n"
+                "Нажмите «📱 Открыть мини-апп», чтобы открыть актуальную версию."
+            ),
+            "reply_markup": build_main_reply_keyboard(target["telegram"]),
+            "disable_notification": silent,
+        }
+        response = post_telegram("sendMessage", payload)
+        status_code = response.status_code if response is not None else None
+
+        if status_code == 200:
+            result["sent"] += 1
+        elif status_code == 403:
+            result["blocked"] += 1
+            print(f"ℹ️ Пользователь {target['chat_id']} заблокировал бота; рассылка продолжается")
+        else:
+            result["failed"] += 1
+            response_text = response.text if response is not None else "Telegram API недоступен"
+            print(
+                f"⚠️ Не удалось обновить меню для {target['chat_id']} "
+                f"(HTTP {status_code}): {response_text}"
+            )
+
+        if index % 50 == 0 or index == result["total"]:
+            print(
+                f"♻️ Обновлено меню: {index}/{result['total']}; "
+                f"успешно: {result['sent']}, заблокировали бота: {result['blocked']}, "
+                f"ошибок: {result['failed']}"
+            )
+
+        if index < result["total"]:
+            time.sleep(0.05)
+
+    return result
 
 # Старый startup удален - теперь используем lifespan
 
@@ -769,33 +852,16 @@ def read_root():
     return {"message": "Student Orders API is running"}
 
 @app.post("/api/bot/force-refresh-keyboards")
-async def force_refresh_keyboards(request: Request, background_tasks: BackgroundTasks):
+def force_refresh_keyboards(request: Request):
     """Принудительное обновление клавиатуры для всех пользователей."""
-    silent = True
-    try:
-        body = await request.json()
-        if isinstance(body, dict) and "silent" in body:
-            silent = bool(body.get("silent"))
-    except Exception:
-        # Тело может отсутствовать, в этом случае используем silent=True по умолчанию.
-        pass
-
-    enqueue_background(background_tasks, force_refresh_all_user_keyboards, silent=silent)
-    return {"status": "accepted", "message": "Обновление клавиатур запущено в фоне"}
+    verify_internal_bot_request(request)
+    return force_refresh_all_user_keyboards(silent=True)
 
 @app.post("/bot/force-refresh-keyboards")
-async def force_refresh_keyboards_compat(request: Request, background_tasks: BackgroundTasks):
+def force_refresh_keyboards_compat(request: Request):
     """Совместимость для прокси, который срезает префикс /api."""
-    silent = True
-    try:
-        body = await request.json()
-        if isinstance(body, dict) and "silent" in body:
-            silent = bool(body.get("silent"))
-    except Exception:
-        pass
-
-    enqueue_background(background_tasks, force_refresh_all_user_keyboards, silent=silent)
-    return {"status": "accepted", "message": "Обновление клавиатур запущено в фоне"}
+    verify_internal_bot_request(request)
+    return force_refresh_all_user_keyboards(silent=True)
 
 async def save_chat_id_handler(request: Request):
     """Общий обработчик для сохранения chat_id пользователя"""
