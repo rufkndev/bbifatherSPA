@@ -1222,6 +1222,109 @@ def get_subjects():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка получения предметов: {str(e)}")
 
+# Catalog endpoints: курсы/семестры/предметы/практические работы для формы заказа.
+# Хранится в JSON-файле на диске backend'а, а не в Supabase, чтобы админ мог
+# добавлять/редактировать/удалять работы через /add без изменения кода и без миграций БД.
+CATALOG_PATH = os.path.join(os.path.dirname(__file__), 'data', 'catalog.json')
+CATALOG_LOCK = threading.Lock()
+
+def load_catalog() -> dict:
+    with CATALOG_LOCK:
+        if not os.path.exists(CATALOG_PATH):
+            os.makedirs(os.path.dirname(CATALOG_PATH), exist_ok=True)
+            default_catalog = {"courses": [], "subjects": []}
+            with open(CATALOG_PATH, 'w', encoding='utf-8') as f:
+                json.dump(default_catalog, f, ensure_ascii=False, indent=2)
+            return default_catalog
+        with open(CATALOG_PATH, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+def save_catalog(catalog: dict) -> None:
+    with CATALOG_LOCK:
+        tmp_path = f"{CATALOG_PATH}.tmp"
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            json.dump(catalog, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, CATALOG_PATH)
+
+def generate_catalog_work_id(subject_id: str, title: str) -> str:
+    slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')[:40] or 'work'
+    return f"{subject_id}-{slug}-{secrets.token_hex(3)}"
+
+def parse_optional_price(raw_price: Any) -> Optional[float]:
+    if raw_price is None or raw_price == '':
+        return None
+    try:
+        price = float(raw_price)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Некорректная цена")
+    if price < 0:
+        raise HTTPException(status_code=400, detail="Цена не может быть отрицательной")
+    return price
+
+@app.get("/api/catalog")
+@app.get("/catalog")
+def get_catalog():
+    return load_catalog()
+
+@app.post("/api/catalog/works")
+@app.post("/catalog/works")
+async def add_catalog_work(request: Request):
+    data = await request.json()
+    subject_id = str(data.get('subject_id') or '').strip()
+    title = str(data.get('title') or '').strip()
+    if not subject_id or not title:
+        raise HTTPException(status_code=400, detail="Укажите предмет и название работы")
+    price = parse_optional_price(data.get('price'))
+
+    catalog = load_catalog()
+    subject = next((s for s in catalog['subjects'] if s['id'] == subject_id), None)
+    if not subject:
+        raise HTTPException(status_code=404, detail="Предмет не найден")
+
+    new_work: Dict[str, Any] = {"id": generate_catalog_work_id(subject_id, title), "title": title}
+    if price is not None:
+        new_work['price'] = price
+    subject.setdefault('works', []).append(new_work)
+    save_catalog(catalog)
+    return new_work
+
+@app.patch("/api/catalog/works/{work_id}")
+@app.patch("/catalog/works/{work_id}")
+async def update_catalog_work(work_id: str, request: Request):
+    data = await request.json()
+    catalog = load_catalog()
+    for subject in catalog['subjects']:
+        for work in subject.get('works', []):
+            if work['id'] != work_id:
+                continue
+            if 'title' in data:
+                title = str(data.get('title') or '').strip()
+                if not title:
+                    raise HTTPException(status_code=400, detail="Название работы не может быть пустым")
+                work['title'] = title
+            if 'price' in data:
+                price = parse_optional_price(data.get('price'))
+                if price is None:
+                    work.pop('price', None)
+                else:
+                    work['price'] = price
+            save_catalog(catalog)
+            return work
+    raise HTTPException(status_code=404, detail="Работа не найдена")
+
+@app.delete("/api/catalog/works/{work_id}")
+@app.delete("/catalog/works/{work_id}")
+def delete_catalog_work(work_id: str):
+    catalog = load_catalog()
+    for subject in catalog['subjects']:
+        works = subject.get('works', [])
+        for i, work in enumerate(works):
+            if work['id'] == work_id:
+                del works[i]
+                save_catalog(catalog)
+                return {"status": "ok"}
+    raise HTTPException(status_code=404, detail="Работа не найдена")
+
 # Orders endpoints
 @app.get("/api/orders")
 @app.get("/orders")
@@ -1690,6 +1793,17 @@ async def update_order_admin(order_id: int, request: Request, background_tasks: 
         for field in ['title', 'description', 'input_data', 'variant_info', 'deadline']:
             if field in data:
                 update_payload[field] = data[field]
+
+        # Состав практических работ (список ID работ из каталога) — храним в том же
+        # JSON-строковом формате, что и при создании заказа (см. create_order).
+        if 'selected_works' in data:
+            selected_works = data.get('selected_works') or []
+            if not isinstance(selected_works, list):
+                raise HTTPException(status_code=400, detail="Некорректный состав работ")
+            update_payload['selected_works'] = json.dumps(selected_works) if selected_works else None
+
+        if 'is_full_course' in data:
+            update_payload['is_full_course'] = bool(data.get('is_full_course'))
 
         # Обновление имени и группы студента
         if 'student_name' in data:

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { Order, Subject, CreateOrderRequest, OrderListResponse, Student } from './types';
+import { CourseData, SubjectData, WorkItem } from './data/subjects';
 
 const normalizeApiBaseUrl = (rawUrl?: string): string => {
   // В production API обслуживается тем же origin через Nginx (/api).
@@ -183,7 +184,10 @@ export const getStudents = async (): Promise<Student[]> => {
 };
 
 // Админ: полное обновление заказа
-export const updateOrderAdmin = async (id: number, payload: Partial<Order>): Promise<Order> => {
+export const updateOrderAdmin = async (
+  id: number,
+  payload: Partial<Omit<Order, 'selected_works'>> & { selected_works?: string[] }
+): Promise<Order> => {
   const response = await api.patch(`/api/orders/${id}/admin`, payload);
   return response.data;
 };
@@ -199,6 +203,37 @@ export const updateOrderExecutor = async (
     payout_amount: payout,
   });
   return response.data;
+};
+
+// Каталог курсов/семестров/предметов/практических работ (используется формой
+// заказа, карточкой заказа в админке и страницей управления /add)
+export const getCatalog = async (): Promise<{ courses: CourseData[]; subjects: SubjectData[] }> => {
+  const response = await api.get('/api/catalog');
+  return response.data;
+};
+
+export const addCatalogWork = async (
+  subjectId: string,
+  work: { title: string; price?: number | null }
+): Promise<WorkItem> => {
+  const response = await api.post('/api/catalog/works', {
+    subject_id: subjectId,
+    title: work.title,
+    price: work.price ?? undefined,
+  });
+  return response.data;
+};
+
+export const updateCatalogWork = async (
+  workId: string,
+  changes: { title?: string; price?: number | null }
+): Promise<WorkItem> => {
+  const response = await api.patch(`/api/catalog/works/${workId}`, changes);
+  return response.data;
+};
+
+export const deleteCatalogWork = async (workId: string): Promise<void> => {
+  await api.delete(`/api/catalog/works/${workId}`);
 };
 
 export default api;

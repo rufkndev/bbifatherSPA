@@ -16,6 +16,7 @@ import OrdersPage from './components/OrdersPage';
 import CreateOrderPage from './components/CreateOrderPage';
 import AdminPage from './components/AdminPage';
 import OrdersBoard from './components/OrdersBoard';
+import CatalogManagementPage from './components/CatalogManagementPage';
 
 function App() {
   const location = useLocation();
@@ -28,6 +29,8 @@ function App() {
         return 'Новый заказ';
       case '/admin':
         return 'Админ панель';
+      case '/add':
+        return 'Практические работы';
       default:
         return 'Система заказов';
     }
@@ -116,6 +119,7 @@ function App() {
             <Route path="/create" element={<CreateOrderPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/board" element={<OrdersBoard />} />
+            <Route path="/add" element={<CatalogManagementPage />} />
           </Routes>
         </Container>
       </Box>

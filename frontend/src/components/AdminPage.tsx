@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AdminLogin from './AdminLogin';
 import {
   Box,
@@ -26,10 +27,13 @@ import {
   MenuItem,
   Alert,
   CircularProgress,
-  Pagination
+  Pagination,
+  Checkbox,
+  FormControlLabel
 } from '@mui/material';
 import { Order, OrderStatus, PaymentMethod } from '../types';
-import { getOrders, updateOrderAdmin, markOrderAsPaid, uploadOrderFiles } from '../api';
+import { getOrders, getCatalog, updateOrderAdmin, markOrderAsPaid, uploadOrderFiles } from '../api';
+import { SubjectData, calculateFullCoursePrice, calculateSelectedWorksPrice } from '../data/subjects';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
@@ -73,6 +77,7 @@ const paymentMethodLabels: Record<PaymentMethod, string> = {
 };
 
 const AdminPage: React.FC = () => {
+  const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState(
     localStorage.getItem('adminAuth') === 'true'
   );
@@ -97,6 +102,18 @@ const AdminPage: React.FC = () => {
   const [studentNameInput, setStudentNameInput] = useState<string>('');
   const [studentGroupInput, setStudentGroupInput] = useState<string>('');
   const [paymentMethodInput, setPaymentMethodInput] = useState<PaymentMethod>('sberbank');
+
+  // Каталог предметов/работ — для выбора состава практических работ заказа
+  // мини-меню с чекбоксами, как при оформлении заказа, вместо текстового поля.
+  const [catalogSubjects, setCatalogSubjects] = useState<SubjectData[]>([]);
+  const [selectedWorksInput, setSelectedWorksInput] = useState<string[]>([]);
+  const [isFullCourseInput, setIsFullCourseInput] = useState(false);
+
+  useEffect(() => {
+    getCatalog()
+      .then(catalog => setCatalogSubjects(catalog.subjects))
+      .catch(e => console.error('Ошибка загрузки каталога работ:', e));
+  }, []);
 
   const loadOrders = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -151,6 +168,41 @@ const AdminPage: React.FC = () => {
     setStudentNameInput(order.student?.name || '');
     setStudentGroupInput(order.student?.group || '');
     setPaymentMethodInput(order.payment_method || 'sberbank');
+
+    let parsedSelectedWorks: string[] = [];
+    if (order.selected_works) {
+      try {
+        const parsed = JSON.parse(order.selected_works);
+        if (Array.isArray(parsed)) {
+          parsedSelectedWorks = parsed;
+        }
+      } catch (e) {
+        console.warn('Не удалось разобрать selected_works заказа:', e);
+      }
+    }
+    setSelectedWorksInput(parsedSelectedWorks);
+    setIsFullCourseInput(Boolean(order.is_full_course));
+  };
+
+  const getMatchedCatalogSubject = (order: Order | null): SubjectData | undefined => {
+    if (!order?.subject?.name) return undefined;
+    return catalogSubjects.find(s => s.name === order.subject?.name);
+  };
+
+  const toggleSelectedWork = (workId: string) => {
+    setSelectedWorksInput(prev =>
+      prev.includes(workId) ? prev.filter(id => id !== workId) : [...prev, workId]
+    );
+  };
+
+  const buildWorksDescription = (subject: SubjectData): string => {
+    if (isFullCourseInput) {
+      return 'Заказан весь курс';
+    }
+    return subject.works
+      .filter(work => selectedWorksInput.includes(work.id))
+      .map(work => work.title)
+      .join(', ');
   };
 
   const handleSaveAdmin = async (statusOverride?: OrderStatus) => {
@@ -174,8 +226,9 @@ const AdminPage: React.FC = () => {
         }
       }
 
-      const payload = {
-        // title и description не изменяем
+      const matchedSubject = getMatchedCatalogSubject(selectedOrder);
+
+      const payload: any = {
         input_data: inputDataInput,
         variant_info: variantInfoInput,
         deadline: deadlineInput,
@@ -188,6 +241,16 @@ const AdminPage: React.FC = () => {
         is_paid: selectedOrder.is_paid,
         payment_method: paymentMethodInput,
       };
+
+      if (matchedSubject && matchedSubject.works.length > 0) {
+        // Состав работ редактируется мини-меню с выбором — описание пересчитываем из каталога
+        payload.selected_works = isFullCourseInput ? [] : selectedWorksInput;
+        payload.is_full_course = isFullCourseInput;
+        payload.description = buildWorksDescription(matchedSubject);
+      } else {
+        // Нет соответствия в каталоге (кастомный заказ) — описание остаётся свободным текстом
+        payload.description = descriptionInput;
+      }
 
       const updatedOrder = await updateOrderAdmin(selectedOrder.id, payload);
       setOrders(prev => prev.map(order => 
@@ -251,7 +314,7 @@ const AdminPage: React.FC = () => {
   return (
     <Box sx={{ maxWidth: 1400, mx: 'auto', px: 3, py: 4, background: '#ffffff' }}>
       {/* Header */}
-      <Box 
+      <Box
         sx={{
           background: '#ffffff',
           borderRadius: 4,
@@ -259,29 +322,39 @@ const AdminPage: React.FC = () => {
           mb: 4,
           border: '1px solid #e2e8f0',
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          gap: 2,
         }}
       >
-        <Typography 
-          variant="h2" 
-          component="h1" 
-          sx={{ 
-            fontWeight: 700, 
-            mb: 1,
-            color: '#1e293b',
-          }}
-        >
-          Панель администратора
-        </Typography>
-        <Typography 
-          variant="subtitle1" 
-          sx={{ 
-            color: 'grey.600',
-            fontWeight: 500,
-            fontSize: '1.1rem',
-          }}
-        >
-          Управление заказами и мониторинг системы
-        </Typography>
+        <Box>
+          <Typography
+            variant="h2"
+            component="h1"
+            sx={{
+              fontWeight: 700,
+              mb: 1,
+              color: '#1e293b',
+            }}
+          >
+            Панель администратора
+          </Typography>
+          <Typography
+            variant="subtitle1"
+            sx={{
+              color: 'grey.600',
+              fontWeight: 500,
+              fontSize: '1.1rem',
+            }}
+          >
+            Управление заказами и мониторинг системы
+          </Typography>
+        </Box>
+        <Button variant="outlined" onClick={() => navigate('/add')} sx={{ whiteSpace: 'nowrap' }}>
+          Практические работы
+        </Button>
       </Box>
 
       {error && (
@@ -687,10 +760,77 @@ const AdminPage: React.FC = () => {
                 </Grid>
               </Grid>
 
-              <Typography variant="body2" color="text.secondary" gutterBottom sx={{ wordBreak: 'break-word', mb: 2 }}>
-                {descriptionInput || 'Описание не указано'}
-              </Typography>
-              
+              {(() => {
+                const matchedSubject = getMatchedCatalogSubject(selectedOrder);
+                if (matchedSubject && matchedSubject.works.length > 0) {
+                  return (
+                    <Box sx={{ mb: 2, p: 2, border: '1px solid #e2e8f0', borderRadius: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        Состав практических работ
+                      </Typography>
+
+                      {matchedSubject.fullCourseDiscount != null && (
+                        <FormControlLabel
+                          sx={{ mb: 1, display: 'flex' }}
+                          control={
+                            <Checkbox
+                              checked={isFullCourseInput}
+                              color="success"
+                              onChange={(e) => setIsFullCourseInput(e.target.checked)}
+                            />
+                          }
+                          label={
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: '#059669' }}>
+                              Весь курс ({matchedSubject.works.length} работ, скидка {matchedSubject.fullCourseDiscount}%)
+                            </Typography>
+                          }
+                        />
+                      )}
+
+                      {!isFullCourseInput && (
+                        <Box sx={{ maxHeight: 260, overflowY: 'auto' }}>
+                          {matchedSubject.works.map(work => (
+                            <FormControlLabel
+                              key={work.id}
+                              sx={{ display: 'flex', ml: 0 }}
+                              control={
+                                <Checkbox
+                                  checked={selectedWorksInput.includes(work.id)}
+                                  onChange={() => toggleSelectedWork(work.id)}
+                                />
+                              }
+                              label={
+                                <Typography variant="body2">
+                                  {work.title}{work.price != null ? ` — ${work.price} ₽` : ''}
+                                </Typography>
+                              }
+                            />
+                          ))}
+                        </Box>
+                      )}
+
+                      <Typography variant="body2" sx={{ mt: 1, color: '#059669', fontWeight: 600 }}>
+                        {isFullCourseInput
+                          ? `${calculateFullCoursePrice(matchedSubject)} ₽`
+                          : `${calculateSelectedWorksPrice(matchedSubject, selectedWorksInput)} ₽ (${selectedWorksInput.length} работ выбрано)`}
+                      </Typography>
+                    </Box>
+                  );
+                }
+                return (
+                  <TextField
+                    fullWidth
+                    multiline
+                    rows={2}
+                    label="Описание / состав работ"
+                    value={descriptionInput}
+                    onChange={(e) => setDescriptionInput(e.target.value)}
+                    helperText="Для этого заказа нет соответствующего предмета в каталоге работ — описание редактируется как текст"
+                    sx={{ mb: 2 }}
+                  />
+                );
+              })()}
+
               <TextField
                 fullWidth
                 multiline

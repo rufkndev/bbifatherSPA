@@ -29,15 +29,16 @@ import {
   CheckCircle
 } from '@mui/icons-material';
 import { Subject } from '../types';
-import { getSubjects, createOrder } from '../api';
-import { 
-  coursesData, 
-  getSubjectById, 
-  calculateFullCoursePrice, 
-  calculateSelectedWorksPrice, 
-  getCourseById, 
-  getSubjectsByCourseAndSemester, 
-  getSemesterName 
+import { getSubjects, getCatalog, createOrder } from '../api';
+import {
+  coursesData,
+  setCatalogData,
+  getSubjectById,
+  calculateFullCoursePrice,
+  calculateSelectedWorksPrice,
+  getCourseById,
+  getSubjectsByCourseAndSemester,
+  getSemesterName
 } from '../data/subjects';
 import { useTelegramWebApp } from '../hooks/useTelegramWebApp';
 
@@ -47,6 +48,7 @@ const CreateOrderPage: React.FC = () => {
   const navigate = useNavigate();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [activeStep, setActiveStep] = useState(0);
   
@@ -101,12 +103,24 @@ const CreateOrderPage: React.FC = () => {
   }, [isInTelegram, user, backButton, navigate]);
 
   const loadSubjects = async () => {
+    // Каталог курсов/семестров/работ и список предметов из Supabase (нужен только
+    // для сопоставления subject_id при отправке) загружаются независимо: сбой
+    // одного не должен блокировать другой.
+    try {
+      const catalog = await getCatalog();
+      setCatalogData(catalog.courses, catalog.subjects);
+    } catch (error) {
+      console.error('Ошибка загрузки каталога работ:', error);
+      setError('Не удалось загрузить каталог курсов и работ');
+    } finally {
+      setCatalogLoading(false);
+    }
+
     try {
       const data = await getSubjects();
       setSubjects(data);
     } catch (error) {
       console.error('Ошибка загрузки предметов:', error);
-      setError('Не удалось загрузить список предметов');
     }
   };
 
@@ -1162,6 +1176,14 @@ const CreateOrderPage: React.FC = () => {
         return null;
     }
   };
+
+  if (catalogLoading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ 
