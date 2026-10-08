@@ -21,8 +21,9 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from telegram.request import HTTPXRequest
 from dotenv import load_dotenv
 
-# Загружаем переменные окружения
-load_dotenv()
+# Загружаем переменные окружения: .env главнее переменных шелла/PM2 (как в backend/main.py),
+# иначе старый export TELEGRAM_PROXY_URL перекрывает значение из .env
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=True)
 
 # Настройка логирования
 logging.basicConfig(
