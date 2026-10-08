@@ -12,7 +12,8 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BRANCH="${BRANCH:-main}"
 WEB_ROOT="${WEB_ROOT:-/var/www/bbifather}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8000/}"
+PORT="${PORT:-8000}"
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:$PORT/}"
 VENV="$ROOT/backend/venv"
 
 FULL=0
@@ -84,8 +85,31 @@ npm run build
 cd "$ROOT"
 
 # --- остановка -> публикация -> запуск ---
-step "Остановка сервисов"
-pm2 stop bbifather-backend bbifather-bot >/dev/null 2>&1 || true
+step "Удаление старых процессов"
+pm2 delete bbifather-backend bbifather-bot >/dev/null 2>&1 || true
+# Запуск от root, а процессы раньше жили в PM2 владельца репозитория (bbifather) — он их сам воскрешает
+OWNER="$(stat -c %U "$ROOT" 2>/dev/null || true)"
+if [ "$(id -u)" -eq 0 ] && [ -n "$OWNER" ] && [ "$OWNER" != "root" ]; then
+  su - "$OWNER" -c 'command -v pm2 >/dev/null && pm2 delete bbifather-backend bbifather-bot >/dev/null 2>&1 && pm2 save --force >/dev/null 2>&1' || true
+fi
+
+step "Очистка процессов вне PM2 и проверка порта $PORT"
+# Старые ручные запуски (python bot.py &, gunicorn/uvicorn) держат порт и дают Conflict у бота
+STRAY_RE='gunicorn.*main:app|backend/main\.py|python[0-9.]* +([^ ]*/)?bot\.py'
+if pgrep -f "$STRAY_RE" >/dev/null; then
+  warn "Найдены процессы вне PM2, останавливаю:"
+  pgrep -af "$STRAY_RE" || true
+  $SUDO pkill -f "$STRAY_RE" || true
+  sleep 2
+  $SUDO pkill -9 -f "$STRAY_RE" 2>/dev/null || true
+fi
+port_busy() { [ -n "$(ss -ltn "sport = :$PORT" 2>/dev/null | grep LISTEN || true)" ]; }
+for _ in $(seq 1 10); do port_busy || break; sleep 1; done
+if port_busy; then
+  $SUDO ss -ltnp "sport = :$PORT" || true
+  die "Порт $PORT занят чужим процессом. Если его сразу перезапускают — проверьте чужие pm2/systemd: 'su - bbifather -c \"pm2 list\"', 'systemctl list-units | grep -i bbi'"
+fi
+echo "Порт $PORT свободен"
 
 step "Публикация фронта в $WEB_ROOT"
 $SUDO mkdir -p "$WEB_ROOT"
@@ -99,8 +123,6 @@ else
 fi
 
 step "Запуск backend и бота"
-# delete + start: подхватывает изменения ecosystem.config.js и .env, гарантирует ровно один экземпляр
-pm2 delete bbifather-backend bbifather-bot >/dev/null 2>&1 || true
 pm2 start "$ROOT/ecosystem.config.js"
 pm2 save >/dev/null
 
@@ -124,7 +146,7 @@ echo "Бот online"
 
 step "Готово"
 pm2 status
-if [ "$(pm2 jlist 2>/dev/null | grep -o '"name":"bbifather-bot"' | wc -l)" -gt 1 ]; then
+if [ "$(pm2 pid bbifather-bot | wc -w)" -gt 1 ]; then
   warn "Запущено больше одного bbifather-bot!"
 fi
 echo "Логи: pm2 logs"
