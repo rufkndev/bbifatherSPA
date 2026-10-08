@@ -777,3 +777,5 @@ cd /home/bbifather/bbifatherSPA
 
 ./deploy.sh --full — принудительно переустановить все зависимости.
 ./deploy.sh --no-pull — пересобрать и перезапустить без git pull.
+
+pm2 startup
