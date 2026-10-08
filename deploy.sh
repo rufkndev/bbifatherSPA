@@ -66,12 +66,11 @@ if [ ! -x "$VENV/bin/python" ]; then
   python3 -m venv "$VENV"
   FRESH_VENV=1
 fi
-if [ "$FULL" -eq 1 ] || [ "$FRESH_VENV" -eq 1 ] || [ ! -x "$VENV/bin/gunicorn" ] || changed '^backend/requirements\.txt$'; then
+# Всегда: если всё уже стоит, pip отрабатывает за пару секунд, зато venv гарантированно полный
+if [ "$FULL" -eq 1 ] || [ "$FRESH_VENV" -eq 1 ]; then
   "$VENV/bin/pip" install --upgrade pip >/dev/null
-  "$VENV/bin/pip" install -r "$ROOT/backend/requirements.txt"
-else
-  echo "requirements.txt не менялся — пропускаю"
 fi
+"$VENV/bin/pip" install -r "$ROOT/backend/requirements.txt"
 
 # --- frontend: сборка пока старая версия ещё работает ---
 step "Frontend: сборка"
