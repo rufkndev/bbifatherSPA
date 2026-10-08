@@ -758,7 +758,6 @@ df -h
 python backend/main.py & python bot.py & wait
 pkill -f "python bot.py" && pkill -f "python backend/main.py"
 
-# Обновляем frontend
 cd ../frontend
 npm run build
 sudo cp -r build/* /var/www/bbifather/
@@ -771,3 +770,10 @@ git stash pop
 
 cd /home/bbifather/bbifatherSPA
 
+
+
+
+./deploy.sh
+
+./deploy.sh --full — принудительно переустановить все зависимости.
+./deploy.sh --no-pull — пересобрать и перезапустить без git pull.
